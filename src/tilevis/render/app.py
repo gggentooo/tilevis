@@ -22,13 +22,16 @@ from tilevis.render.layout import UiScale
 from tilevis.render.normalization import get_normalizer
 from tilevis.render.player import StepPlayer
 from tilevis.render.playlist import resolve_step
-from tilevis.render.scenes.base import Scene, SceneContext
+from tilevis.render.scenes.base import Scene, SceneContext, Tooltip
 from tilevis.render.scenes.registry import create_scene
 from tilevis.render.text import FontManager
 from tilevis.render.themes.base import Theme
 from tilevis.render.themes.builtin import THEMES, get_theme
 from tilevis.render.widgets.caption_box import CaptionBox
+from tilevis.render.widgets.help_overlay import HelpOverlayWidget
 from tilevis.render.widgets.hud import HudWidget
+from tilevis.render.widgets.nerd_panel import NerdPanelWidget
+from tilevis.render.widgets.tooltip import TooltipWidget
 from tilevis.render.window import WindowManager
 
 logger = logging.getLogger("tilevis.render.app")
@@ -79,11 +82,16 @@ class App:
 
         self.caption_box = CaptionBox()
         self.hud = HudWidget()
+        self.tooltip_widget = TooltipWidget()
+        self.nerd_panel = NerdPanelWidget()
+        self.help_overlay = HelpOverlayWidget()
 
         self.should_quit: bool = False
         self.exit_code: int = 0
         self._esc_timer: float | None = None
         self._overlay_open: bool = False
+        self._help_open: bool = False
+        self._active_tooltip: Tooltip | None = None
         self._autoplay: bool = False
         self._autoplay_timer: float = 0.0
         self._autoplay_interval: float = 1.6
@@ -159,6 +167,7 @@ class App:
         next_theme = THEMES.get(names[idx])
         self.theme = next_theme
         self.settings.theme = next_theme.name
+        self.fonts = FontManager(self.theme.font_family)
         self._enter_current_step(animate=False)
 
     def dispatch_command(self, cmd: Command) -> None:
@@ -167,9 +176,14 @@ class App:
             self.should_quit = True
             return
 
+        if cmd == Command.TOGGLE_HELP:
+            self._help_open = not self._help_open
+            self._needs_redraw = True
+            return
+
         if cmd == Command.ESCAPE:
-            if self._overlay_open:
-                self._overlay_open = False
+            if self._help_open:
+                self._help_open = False
                 self._needs_redraw = True
                 return
             if self._esc_timer is not None and self._esc_timer > 0.0:
@@ -306,6 +320,62 @@ class App:
                 self._needs_redraw = True
                 continue
 
+            if ev.type == pygame.MOUSEMOTION:
+                pos = getattr(ev, "pos", (0, 0))
+                if self._help_open:
+                    self._active_tooltip = None
+                else:
+                    self.hud.buttons.update_hover(pos)
+                    self.hud.minimap.update_hover(pos)
+                    self._active_tooltip = self.scene.hit_test(pos)
+                self._needs_redraw = True
+                continue
+
+            if ev.type == pygame.MOUSEBUTTONDOWN:
+                pos = getattr(ev, "pos", (0, 0))
+                # 1. Help overlay open -> click closes overlay
+                if self._help_open:
+                    self._help_open = False
+                    self._needs_redraw = True
+                    continue
+
+                # 2. Nerd panel close button
+                if self.settings.nerd_mode and self.nerd_panel.close_btn_rect.collidepoint(pos):
+                    self.settings.nerd_mode = False
+                    self._needs_redraw = True
+                    continue
+
+                # 3. Nerd panel body click consumed
+                if self.settings.nerd_mode and self.nerd_panel.rect.collidepoint(pos):
+                    continue
+
+                # 4. Interactive buttons click
+                btn_cmd = self.hud.buttons.handle_click(pos)
+                if btn_cmd is not None:
+                    self.dispatch_command(btn_cmd)
+                    continue
+
+                # 5. Minimap segment click
+                if self.hud.minimap.handle_click(pos, self.player):
+                    self._enter_current_step(animate=True)
+                    continue
+
+                # 6. Default stage click
+                cmd = self.input_map.translate_event(ev)
+                if cmd is not None:
+                    self.dispatch_command(cmd)
+                    if self.should_quit:
+                        return
+                continue
+
+            if ev.type == pygame.KEYDOWN:
+                key = int(getattr(ev, "key", 0))
+                if self._help_open:
+                    if key in (pygame.K_ESCAPE, pygame.K_h, pygame.K_F1):
+                        self._help_open = False
+                        self._needs_redraw = True
+                    continue
+
             cmd = self.input_map.translate_event(ev)
             if cmd is not None:
                 self.dispatch_command(cmd)
@@ -353,13 +423,63 @@ class App:
             scale=self.scale,
             nerd_mode=self.settings.nerd_mode,
         )
+
+        step = self._current_step
+        cmap_name = (
+            self.theme.sequential_cmap
+            if (step and step.kind in ("ATTENTION_PATTERN", "NEXT_TOKEN"))
+            else self.theme.diverging_cmap
+        )
+        colormap = COLORMAPS.get(cmap_name)
+        scale_val = 1.0
+        if step and step.tensors:
+            scale_val = max(0.01, float(step.tensors[0].stats.abs_p99))
+
         self.hud.draw_footer(
             target,
             self.scale.footer,
+            self.player,
+            self.settings,
+            colormap=colormap,
+            scale_val=scale_val,
             theme=self.theme,
             fonts=self.fonts,
             scale=self.scale,
         )
+
+        if self.settings.nerd_mode and self._current_step is not None:
+            self.nerd_panel.draw(
+                target,
+                self.scale.stage,
+                self._current_step,
+                theme=self.theme,
+                fonts=self.fonts,
+                scale=self.scale,
+                normalizer_name=self.settings.normalizer,
+                normalizer_scale=scale_val,
+            )
+
+        if self._active_tooltip is not None and not self._help_open:
+            self.tooltip_widget.draw(
+                target,
+                self._active_tooltip,
+                sw,
+                sh,
+                theme=self.theme,
+                fonts=self.fonts,
+                scale=self.scale,
+            )
+
+        if self._help_open:
+            self.help_overlay.draw(
+                target,
+                sw,
+                sh,
+                self.input_map,
+                theme=self.theme,
+                fonts=self.fonts,
+                scale=self.scale,
+            )
 
     def run(self) -> int:
         """Execute main presentation event loop with 60 FPS cap and idle CPU throttling."""

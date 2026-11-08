@@ -126,10 +126,52 @@ def _check_command(args: argparse.Namespace) -> int:
 
 
 def _demo_command(args: argparse.Namespace) -> int:
-    """Handle `tilevis demo` subcommand."""
-    # In-memory demo when implemented in Phase 7
-    sys.stdout.write("Subcommand 'demo' is not implemented yet (scheduled for Phase 7).\n")
-    return 1
+    """Handle `tilevis demo` subcommand (in-memory tiny model recording + live playback)."""
+    from pathlib import Path
+
+    from tilevis.core.config import PresenterSettings, RecordSettings
+    from tilevis.core.errors import TilevisError
+    from tilevis.probe.loading.factory import build_model
+    from tilevis.probe.loading.profile import load_profile
+    from tilevis.probe.recorder import TraceRecorder
+    from tilevis.render.app import App
+
+    try:
+        profile_path = Path("profiles/tiny_random.toml")
+        if not profile_path.is_file():
+            candidate = (
+                Path(__file__).resolve().parent.parent.parent / "profiles" / "tiny_random.toml"
+            )
+            if candidate.is_file():
+                profile_path = candidate
+
+        profile = load_profile(profile_path)
+        built_model = build_model(profile, device="cpu")
+
+        prompt = str(getattr(args, "prompt", "Every effort moves you forward"))
+        record_settings = RecordSettings(
+            new_tokens=3,
+            strategy="greedy",
+            seed=123,
+        )
+
+        recorder = TraceRecorder(built_model, record_settings)
+        trace = recorder.record(prompt)
+
+        presenter_settings = PresenterSettings()
+        if getattr(args, "theme", None) is not None:
+            presenter_settings.theme = str(args.theme)
+        if getattr(args, "detail", None) is not None:
+            presenter_settings.detail_level = int(args.detail)
+
+        headless = bool(getattr(args, "headless", False))
+        app = App(trace, presenter_settings, headless=headless)
+        return app.run()
+    except TilevisError as exc:
+        if getattr(args, "verbose", False):
+            raise
+        sys.stderr.write(f"Error: {exc}\n")
+        return 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -312,6 +354,24 @@ def build_parser() -> argparse.ArgumentParser:
         "--prompt",
         default="Every effort moves you forward",
         help="Demo prompt text",
+    )
+    demo_parser.add_argument(
+        "--theme",
+        choices=["dark", "light"],
+        default=None,
+        help="Visual theme override",
+    )
+    demo_parser.add_argument(
+        "--detail",
+        type=int,
+        choices=[1, 2, 3],
+        default=None,
+        help="Detail level: 1 (Story), 2 (Standard), 3 (Deep)",
+    )
+    demo_parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Run demo in headless offscreen mode",
     )
     demo_parser.set_defaults(func=_demo_command)
 

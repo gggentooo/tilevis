@@ -72,11 +72,10 @@ def test_cli_check_stub(capsys: pytest.CaptureFixture[str]) -> None:
     assert "Subcommand 'check' is not implemented yet" in captured.out
 
 
-def test_cli_demo_stub(capsys: pytest.CaptureFixture[str]) -> None:
-    code = main(["demo"])
-    assert code == 1
-    captured = capsys.readouterr()
-    assert "Subcommand 'demo' is not implemented yet" in captured.out
+def test_cli_demo_implemented() -> None:
+    pytest.importorskip("torch")
+    code = main(["demo", "--headless"])
+    assert code == 0
 
 
 def test_main_module_execution() -> None:

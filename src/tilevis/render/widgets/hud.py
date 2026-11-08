@@ -1,6 +1,6 @@
-"""Heads-up display (HUD) showing pass and step counters.
+"""Heads-up display (HUD) coordinating header, minimap, footer controls, and legend.
 
-Single responsibility: render current pass number, total passes, and step index.
+Single responsibility: render status bar, pipeline minimap, footer legend, and buttons.
 Allowed dependencies: tilevis.core, tilevis.render, pygame, stdlib.
 """
 
@@ -8,11 +8,16 @@ from __future__ import annotations
 
 import pygame
 
+from tilevis.core.config import PresenterSettings
 from tilevis.core.kinds import DetailLevel
+from tilevis.render.colormap import Colormap
 from tilevis.render.layout import UiScale
 from tilevis.render.player import StepPlayer
 from tilevis.render.text import FontManager
 from tilevis.render.themes.base import Theme
+from tilevis.render.widgets.buttons import ButtonsWidget
+from tilevis.render.widgets.legend import LegendWidget
+from tilevis.render.widgets.minimap import MinimapWidget
 
 _DETAIL_LABELS: dict[int, str] = {
     int(DetailLevel.STORY): "Story",
@@ -22,7 +27,12 @@ _DETAIL_LABELS: dict[int, str] = {
 
 
 class HudWidget:
-    """Renders top-bar model badge, Word/Step progress counter, and quit toast."""
+    """Renders top header bar (with minimap) and footer bar (with legend and buttons)."""
+
+    def __init__(self) -> None:
+        self.minimap: MinimapWidget = MinimapWidget()
+        self.legend: LegendWidget = LegendWidget()
+        self.buttons: ButtonsWidget = ButtonsWidget()
 
     def format_progress(self, player: StepPlayer) -> str:
         """Build human-readable pass & step counter string ('Word X of Y · Step A / B')."""
@@ -51,7 +61,7 @@ class HudWidget:
         nerd_mode: bool = False,
         esc_armed: bool = False,
     ) -> None:
-        """Render header HUD bar inside rect."""
+        """Render header HUD bar containing model badge, pipeline minimap, and progress counter."""
         if rect.width <= 0 or rect.height <= 0:
             return
 
@@ -101,9 +111,9 @@ class HudWidget:
             right_color,
             bold=True,
             family=theme.font_family,
-            max_width=max(20, bar.width // 2),
+            max_width=max(20, bar.width // 3),
         )
-        left_max_w = max(20, bar.width - right_surf.get_width() - 3 * inner_pad)
+        left_max_w = max(20, bar.width // 4)
         left_surf = fonts.render_text(
             left_txt,
             font_px,
@@ -117,33 +127,91 @@ class HudWidget:
         surface.blit(left_surf, (bar.x + inner_pad, cy_left))
         surface.blit(right_surf, (bar.right - inner_pad - right_surf.get_width(), cy_right))
 
+        # Render pipeline minimap in the center region between left and right text
+        left_end = bar.x + inner_pad + left_surf.get_width()
+        right_start = bar.right - inner_pad - right_surf.get_width()
+        minimap_avail_w = right_start - left_end - 2 * inner_pad
+        if minimap_avail_w >= 100:
+            minimap_h = max(16, min(scale.px(26, minimum=16), bar.height - 10))
+            minimap_rect = pygame.Rect(
+                left_end + inner_pad,
+                bar.y + max(0, (bar.height - minimap_h) // 2),
+                minimap_avail_w,
+                minimap_h,
+            )
+            self.minimap.draw(
+                surface,
+                minimap_rect,
+                player,
+                theme=theme,
+                fonts=fonts,
+                scale=scale,
+            )
+
     def draw_footer(
         self,
         surface: pygame.Surface,
         rect: pygame.Rect,
+        player: StepPlayer,
+        settings: PresenterSettings,
         *,
+        colormap: Colormap,
+        scale_val: float,
         theme: Theme,
         fonts: FontManager,
         scale: UiScale,
     ) -> None:
-        """Render unobtrusive navigation hint bar inside footer rect."""
+        """Render footer bar containing colormap legend, hint text, and interactive buttons."""
         if rect.width <= 0 or rect.height <= 0:
             return
-        hint = (
-            "Right / Space: Next  ·  Left: Back  ·  D: Detail  ·  N: Nerd  ·  T: Theme  ·  "
-            "Esc (x2): Quit"
+
+        pad_x = max(4, scale.px(16, minimum=4))
+
+        # 1. Legend on the left: width ~140-200px
+        legend_w = max(80, min(scale.px(180, minimum=80), rect.width // 5))
+        legend_rect = pygame.Rect(rect.x + pad_x, rect.y + 2, legend_w, max(4, rect.height - 4))
+        self.legend.draw(
+            surface,
+            legend_rect,
+            colormap,
+            scale_val,
+            theme=theme,
+            fonts=fonts,
+            scale=scale,
         )
-        font_px = max(
-            10, min(scale.font_px(theme.small_font_px, minimum=10), max(10, rect.height - 6))
+
+        # 2. Interactive buttons on the right: width ~320-460px
+        buttons_w = max(180, min(scale.px(440, minimum=180), rect.width // 2))
+        buttons_rect = pygame.Rect(
+            rect.right - pad_x - buttons_w,
+            rect.y + 2,
+            buttons_w,
+            max(4, rect.height - 4),
         )
-        pad_x = max(4, scale.px(20, minimum=4))
-        surf = fonts.render_text(
-            hint,
-            font_px,
-            theme.text_secondary,
-            family=theme.font_family,
-            max_width=max(20, rect.width - 2 * pad_x),
+        self.buttons.draw(
+            surface,
+            buttons_rect,
+            player,
+            settings,
+            theme=theme,
+            fonts=fonts,
+            scale=scale,
         )
-        hx = rect.x + max(0, (rect.width - surf.get_width()) // 2)
-        hy = rect.y + max(0, (rect.height - surf.get_height()) // 2)
-        surface.blit(surf, (hx, hy))
+
+        # 3. Navigation hint centered between legend and buttons if space permits
+        hint_left = legend_rect.right + pad_x
+        hint_right = buttons_rect.x - pad_x
+        hint_avail_w = hint_right - hint_left
+        if hint_avail_w >= 120:
+            hint = "Right/Space: Next · Left: Back · D: Detail · N: Nerd · T: Theme · Esc(x2): Quit"
+            font_px = max(9, min(scale.font_px(11, minimum=9), max(9, rect.height - 8)))
+            surf = fonts.render_text(
+                hint,
+                font_px,
+                theme.text_secondary,
+                family=theme.font_family,
+                max_width=hint_avail_w,
+            )
+            hx = hint_left + max(0, (hint_avail_w - surf.get_width()) // 2)
+            hy = rect.y + max(0, (rect.height - surf.get_height()) // 2)
+            surface.blit(surf, (hx, hy))

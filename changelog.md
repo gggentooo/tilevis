@@ -17,7 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 | `0.4.0` | Phase 4 | Probe: hooks, builders, reduction, generation, recorder | Completed (2026-11-08) |
 | `0.5.0` | Phase 5 | Renderer foundation, navigation, tiles and generic scene | Completed (2026-11-08) |
 | `0.6.0` | Phase 6 | Dedicated scenes: matmul, attention, residual and prediction | Completed (2026-11-08) |
-| `0.7.0` | Phase 7 | Presentation UX, widgets, nerd mode and polish | Planned |
+| `0.7.0` | Phase 7 | Presentation UX, widgets, nerd mode and polish | Completed (2026-11-08) |
 | `1.0.0` | Phase 8 | Windows lecture-hall readiness, preflight, packaging and docs | Planned |
 
 ---
@@ -25,7 +25,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
-- *(Phase 7 presentation UX, widgets, nerd mode and polish pending.)*
+- *(Phase 8 Windows lecture-hall readiness, preflight, packaging and docs pending.)*
+
+---
+
+## [0.7.0] - 2026-11-08 — Phase 7: Presentation UX, Widgets, Nerd Mode and Polish
+
+**Requirements addressed:** R1, R2, R4, R5, R7, R8, R9, R10, R11
+
+### Added
+- `src/tilevis/render/widgets/minimap.py`: `MinimapWidget` rendering bounded pipeline overview bar (`Input ▸ B1 ▸ B2 … ▸ Output`), dynamic middle-block collapsing with ellipses for deep architectures (`12`, `24`, `48` layers), active stage/block highlight, and direct `JUMP` hit testing.
+- `src/tilevis/render/widgets/buttons.py`: `ButtonsWidget` on-screen clickable navigation controls (`< Prev`, `Next >`, `Detail` level pill, `Nerd` mode toggle, `?` help button) with hover states enabling mouse-only presentation.
+- `src/tilevis/render/widgets/legend.py`: `LegendWidget` colormap gradient bar with formatted numeric endpoints (`-scale / 0 / +scale` for diverging maps, `0% / 50% / 100%` for sequential maps).
+- `src/tilevis/render/widgets/tooltip.py`: `TooltipWidget` floating hover card displaying original unreduced coordinates (token text, feature/head index, candidate word) and exact float values, with four-corner edge flip and clamping guaranteeing coordinates stay within `[0, W] × [0, H]`.
+- `src/tilevis/render/widgets/nerd_panel.py`: `NerdPanelWidget` toggled via `N` displaying technical telemetry (step ID, module path, semantic, tensor shapes, reduction strategy, full tensor statistics, Fidelity status badge with max error, normalizer scale, and close button).
+- `src/tilevis/render/widgets/help_overlay.py`: `HelpOverlayWidget` modal keyboard & mouse cheat sheet toggled with `H`/`F1` or on-screen `?` button, generated dynamically from active `InputMap` keybindings, with backdrop dismiss and modal precedence.
+- `tilevis demo`: In-memory seeded demo subcommand (`tilevis demo [--prompt TEXT] [--theme THEME] [--detail DETAIL] [--headless]`) building `tiny_random`, recording 3 passes, and launching interactive playback.
+- Test suites: `tests/render/test_widgets.py` (13 tests for minimap, buttons, tooltip four-corner clamping, nerd panel fidelity styling, legend endpoints, WCAG contrast), `tests/render/test_phase7_ux_and_weakness.py` (12 tests for overlay precedence, mouse-only presentation walkthrough, 50-toggle theme cache invalidation, and compat matrix walkthrough), and `tests/integration/test_demo_cli.py` (2 integration tests for `tilevis demo`).
+
+### Changed
+- `pyproject.toml` & `src/tilevis/__init__.py`: bumped version from `0.6.0` to `0.7.0`.
+- `src/tilevis/render/widgets/hud.py`: integrated `MinimapWidget` into header center and `LegendWidget` + `ButtonsWidget` into footer.
+- `src/tilevis/render/app.py`: wired widget event routing, mouse movement / hover tracking, click consumption, modal overlay precedence, live theme cache invalidation, and autoplay (`P`).
+- `src/tilevis/cli.py`: implemented `tilevis demo` subcommand with `--headless`, `--theme`, and `--detail` flags.
+- `tests/test_cli.py`: updated `demo` subcommand test from stub expectation to implemented execution.
+
+### Fixed
+- **Mouse event routing & stage isolation:** Ensured clicking on-screen buttons (`< Prev`, `Next >`, `Detail`, `Nerd`, `?`) and minimap segments consumes the mouse event and triggers only that widget's action without triggering accidental stage navigation.
+- **Modal overlay precedence:** Guaranteed that while `HelpOverlayWidget` is open, any click or `Escape` keypress dismisses the overlay without advancing steps or arming application exit.
+- **Four-corner tooltip viewport bounding:** Verified that tooltips triggered at exact screen corners `(0, 0)`, `(W-1, 0)`, `(0, H-1)`, and `(W-1, H-1)` flip and clamp strictly inside `[0, W] × [0, H]` across all viewport sizes (`800x600`, `1920x1080`, `3440x1440`).
+- **Theme font and surface invalidation:** Re-created `FontManager` and invalidated scene tile surfaces on `T` toggle to ensure clean color switches with zero memory leaks.
+
+### Decisions & Rationale
+- **Self-contained footer controls for lecture-hall presentation:** Placed `< Prev`, `Next >`, detail pill, nerd badge, and help button directly on the footer alongside the color legend, enabling seamless mouse-only control on a lecture-hall PC without requiring a physical keyboard.
+- **Dynamic minimap windowing for deep models:** Kept minimap segment count bounded ($\le 14$ segments) for 12, 24, and 48 layer models by pinning input, output, first/last blocks, and a sliding 3-block window around the active block with ellipses.
+
+### Verification & Test Summary
+- **Automated tests:** **308 passed** in **35.16 s** (`pytest -m "not manual" --cov=tilevis`, including `slow` and `perf` suites; **27** new tests added across `tests/render/` and `tests/integration/`), **91%** overall statement coverage across 7,761 statements (`tooltip.py` 100%, `help_overlay.py` 99%, `nerd_panel.py` 99%, `legend.py` 98%, `hud.py` 94%, `buttons.py` 92%, `app.py` 80%, `minimap.py` 82%).
+- **Compatibility matrix & torch-free guarantee:** Walked through all 8 `compat_matrix` models clicking buttons and toggling `N`, `T`, `D`, `H`, and `P`; verified `tilevis demo` smoke tests; verified `test_torch_free_suite.py` and `test_import_boundaries.py` pass cleanly.
+- **WCAG contrast compliance:** Automated test verified relative-luminance contrast ratio $\ge 4.5:1$ for all primary and secondary text against background, panel, and panel_alt colors in both `dark` (7.38–16.97:1) and `light` (7.29–17.58:1) themes.
+- **Static checks:** `ruff check src tests` clean, `ruff format --check src tests` clean (143 files), `mypy --strict` on `core`/`narration`/`render` (54 files clean), `mypy` on `probe` (32 files clean), `test_import_boundaries.py` clean, and `git status/diff ch07/` completely empty.
+- **Manual checks:** Generated and visually inspected 6 UI widget captures (`01_default_hud_minimap_buttons_legend.png`, `02_nerd_mode_panel.png`, `03_tooltip_hover.png`, `04_help_overlay.png`, `05_light_theme_hud.png`, and `06_800x600_compact_hud.png`), confirming crisp text legibility, balanced minimap layout, properly aligned legend, and cleanly formatted help overlay.
+
+### Known Issues & Deferred Items
+- Standalone lecture-hall packaging, `tilevis check` preflight diagnostics, `scripts/play_demo.bat` / `scripts/play_demo.sh`, and `README.md` are scheduled for Phase 8 (`1.0.0`).
 
 ---
 

@@ -15,7 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 | `0.2.0` | Phase 2 | Core data contract and trace format | Completed (2026-11-08) |
 | `0.3.0` | Phase 3 | Model loading, config inference, text and adapters | Completed (2026-11-08) |
 | `0.4.0` | Phase 4 | Probe: hooks, builders, reduction, generation, recorder | Completed (2026-11-08) |
-| `0.5.0` | Phase 5 | Renderer foundation, navigation, tiles and generic scene | Planned |
+| `0.5.0` | Phase 5 | Renderer foundation, navigation, tiles and generic scene | Completed (2026-11-08) |
 | `0.6.0` | Phase 6 | Dedicated scenes: matmul, attention, residual and prediction | Planned |
 | `0.7.0` | Phase 7 | Presentation UX, widgets, nerd mode and polish | Planned |
 | `1.0.0` | Phase 8 | Windows lecture-hall readiness, preflight, packaging and docs | Planned |
@@ -25,7 +25,60 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
-- *(Phase 5 renderer foundation, navigation, tiles and generic scene pending.)*
+- *(Phase 6 dedicated scenes: matmul, attention, residual and prediction pending.)*
+
+---
+
+## [0.5.0] - 2026-11-08 — Phase 5: Renderer Foundation, Navigation, Tiles and Generic Scene
+
+**Requirements addressed:** R1, R2, R3, R4, R5, R7, R8, R9, R10, R11
+
+### Added
+- `src/tilevis/narration/`:
+  - `locales/en.toml`: Audience-friendly title, metaphor-driven body captions, and technical nerd-mode templates for all 19 `Semantic` entries, all 14 `StepKind` fallbacks, plus synthetic `title` and `end` cards.
+  - `captions.py`: `Caption` dataclass and `CaptionProvider` with `semantic -> kind -> generic` lookup hierarchy, dynamic `{ff_dim}` extraction, and non-crashing `?` substitution for missing placeholders.
+- `src/tilevis/assets/fonts/`: Bundled SIL OFL 1.1 `NotoSans-Regular.ttf`, `NotoSans-Bold.ttf`, and `OFL.txt` with zero system font dependency.
+- `src/tilevis/render/`:
+  - `platform.py` & `window.py`: Windows High-DPI awareness (`SetProcessDpiAwareness(2)` with `SetProcessDPIAware()` fallback), `WindowManager` supporting `borderless`, `windowed`, and `exclusive` modes, `F11` mode toggling, programmatic 3×3 tile icon, and resize handling.
+  - `themes/base.py` & `themes/builtin.py`: `Theme` dataclass and `THEMES` registry with colorblind-safe `dark` and `light` themes verified to $\ge 4.5:1$ WCAG contrast.
+  - `colormap.py` & `normalization.py`: `COLORMAPS` (`diverging_blue_orange`, `sequential_purple`, `diverging_teal_magenta`) with bit-exact midpoint zero mapping at `lut[127]`, plus `NORMALIZERS` (`per_tensor`, `shared_step`, `global_pass`) using outlier-resistant `abs_p99`.
+  - `text.py`: `FontManager` loading bundled OFL fonts via `importlib.resources` + `io.BytesIO` with size caching, pixel-accurate wrapping/truncation, and `.notdef` fallback substitution.
+  - `layout.py`: `UiScale` logical `1920x1080` design space, aspect-preserving letterboxing, and non-overlapping `header`, `stage`, `caption`, and `footer` regions across extreme aspect ratios.
+  - `tiles.py`: `TileGrid` vectorized NumPy RGB surface caching, automatic display downsampling (`"showing N of M"`) below minimum cell thresholds, exact `cell_at()` reverse coordinate mapping via `AxisInfo.indices`, and reveal/highlight overlays.
+  - `playlist.py` & `player.py`: `StepRef`, `build_playlist()` (`STORY`/`STANDARD`/`DEEP`, `detail_blocks`, `later_pass_level`, synthetic `TITLE`/`END` cards), `resolve_step()`, and bounded `StepPlayer` with cursor re-anchoring on setting updates.
+  - `commands.py` & `input_map.py`: `Command` StrEnum and `InputMap` supporting configurable TOML `[keys]` overrides, Caps/NumLock-tolerant modifiers, mouse click routing, and keycode resolution without requiring an initialized video system.
+  - `animation.py`: `EASINGS` (`linear`, `ease_out_cubic`, `ease_in_out_quad`), `Tween`, and speed-scaled `Timeline` with immediate `finish()` completion.
+  - `scenes/base.py`, `scenes/registry.py`, `scenes/generic.py`: `Scene` protocol, `SceneContext`, `Tooltip`, `SCENES` registry, and `GenericScene` fallback rendering 1-D/2-D/3-D tensors (with head cycling) and 0-tensor metadata cards.
+  - `widgets/caption_box.py` & `widgets/hud.py`: Wrapped `CaptionBox` (including `[Nerd]` summary line) and `HudWidget` progress indicator, double-`Esc` arming warning, and keyboard hint footer.
+  - `app.py`: `App` coordinating event dispatch, pure `tick(dt, events)`, 60 FPS cap, idle `pygame.event.wait(250)` throttling, and 2.0 s double-`Esc` quit confirmation.
+- Test suites: `tests/narration/test_captions.py`, `tests/render/test_colormap_norm.py`, `tests/render/test_tiles.py`, `tests/render/test_playlist_player.py`, `tests/render/test_animation.py`, `tests/render/test_input_map.py`, `tests/render/test_themes_layout.py`, `tests/render/test_window_and_platform.py`, `tests/render/test_app_headless.py`, `tests/render/test_torch_free_suite.py`, and `tests/integration/test_play_cli.py`.
+
+### Changed
+- `pyproject.toml`: bumped version to `0.5.0` and configured `[tool.setuptools.package-data]` for `assets/fonts/*` and `narration/locales/*.toml`.
+- `src/tilevis/__init__.py`: bumped `__version__` to `"0.5.0"`.
+- `src/tilevis/cli.py`: implemented `tilevis play` subcommand (`--presenter`, `--window`, `--theme`, `--detail`, `--headless`) and updated `tests/test_cli.py`.
+- `src/tilevis/core/validation.py`: reinforced `validate_trace()` to reject tensors with empty/zero-sized dimensions (`0 in shape`).
+- `technical_document.md`: documented the non-empty tensor validation invariant and `--headless` CLI playback flag.
+
+### Fixed
+- **Empty candidate tensors in `probe/builders/output.py` (found during Phase 5 sample trace playback):** `OutputStepBuilder` previously passed raw vocabulary token IDs (`0..50256`) as `custom_indices_by_axis` into already-sliced `(emb_dim, k)` candidate weights/logits/probability arrays (`full_size = k`), stripping candidates with IDs `>= k` to zero-sized shapes `(48, 0)`, `(1, 0)`, `(0,)`. Removed erroneous `custom_indices_by_axis` so candidate dimensions retain `[0..k-1]` indices with matching word labels, stored `candidate_ids` in `lm_head` step metadata, added an empty-slice guard in `GenericScene`, reinforced `validate_trace()`, and regenerated `traces/samples/tiny_demo.trace.npz` and `traces/samples/tiny_ch07.trace.npz`.
+- `App.run()` event polling when `headless=True`: avoided calling `pygame.event.get()`/`wait()` on an uninitialized SDL video subsystem so `tilevis play --headless` succeeds without requiring `SDL_VIDEODRIVER=dummy`.
+- `Tween.value_at()` endpoint precision: clamped `elapsed >= delay + duration` directly to `end` against IEEE-754 subtraction rounding.
+- HUD footer missing-glyph boxes in `NotoSans`: updated footer hint labels to clear text (`Right / Space: Next  ·  Left: Back ...`) and added cached `.notdef` fallback substitution in `FontManager` for arrow/math/newline symbols (`↵` -> `\n`).
+
+### Decisions & Rationale
+- **Bundled OFL font with safe symbol fallback:** Bundled `NotoSans-Regular.ttf` and `NotoSans-Bold.ttf` via `importlib.resources` (never OS system fonts) and added runtime `.notdef` pixel comparison caching so tokens containing `↵` or arrows render cleanly without tofu boxes while remaining compatible with richer custom fonts in the future.
+- **Logical 1920×1080 scaling + automatic tile downsampling:** Scales layout proportionally across 800×600 through 4K and ultrawide 3440×1440 viewports, automatically switching tight `TileGrid` panels to `"showing N of M"` while preserving exact reverse index lookup in `cell_at()`.
+
+### Verification & Test Summary
+- **Automated tests:** **207 passed** in **17.04s** (`64` new tests added across `tests/narration/`, `tests/render/`, `tests/integration/test_play_cli.py`, and `tests/core/test_validation.py`), **90%** overall statement coverage across 4,590 statements (`src/tilevis/render/tiles.py` 95%, `generic.py` 95%, `captions.py` 90%).
+- **Compatibility matrix & torch-free guarantee:** Headless `App` stepped start-to-end and back across synthetic traces for all 8 `compat_matrix` models (`tiny_ch07`, `small_bias`, `heads_8_of_64`, `head_dim_1`, `deep_narrow`, `lora_small`, `wrapped_ckpt`, `gpt2_small_shape`) and both regenerated Phase 4 sample traces; subprocess runner executed the entire `tests/render` + `tests/narration` suite with `torch` blocked in `sys.meta_path`.
+- **Static checks:** `ruff check src tests` (clean), `ruff format --check src tests` (135 files formatted), `mypy --strict` on `core`, `narration`, `render` (53 files clean), `mypy` on `probe` (32 files clean), `test_import_boundaries.py` clean, and `git status/diff ch07/` completely empty.
+- **Manual checks:** Verified real Cocoa SDL display creation on macOS (`pygame-ce 2.5.8 / SDL 2.32.10`) in both `windowed` (`1512x842`) and `borderless` (`1512x982`) modes, and visually inspected rendered `1920x1080` PNG captures (`title`, `embed`, `att.scores`, `next_token`) confirming crisp Noto Sans typography, legible tile grids, and clean captions. Interactive mouse/keyboard rehearsal on the target Windows machine will run alongside Phase 7/8 checks.
+
+### Known Issues & Deferred Items
+- Dedicated animated step scenes (`matmul`, `qkv`, `attention` heatmap + arcs, `residual`, `prediction` bar chart) are scheduled for Phase 6 (`0.6.0`); all step kinds render through `GenericScene` in `0.5.0`.
+- Interactive UI widgets (`minimap`, `legend`, `buttons`, `tooltip`, `nerd_panel`, `help_overlay`) and `tilevis demo` are scheduled for Phase 7 (`0.7.0`).
 
 ---
 

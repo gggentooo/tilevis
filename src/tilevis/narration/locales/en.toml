@@ -1,6 +1,185 @@
 # English narration text catalogs for tilevis
-# Keyed by Semantic or StepKind
+# Keyed by Semantic (lowercase/dotted), StepKind (UPPERCASE), or synthetic card key.
+
+[title]
+title = "Inside an LLM's Brain"
+body = "Let's watch {n_blocks} layer(s) work step-by-step to turn colored number tiles into a next-word prediction."
+nerd = "Architecture summary: {n_blocks} block(s), emb_dim={emb_dim}, n_heads={n_heads}."
+
+[end]
+title = "Story Complete"
+body = "We stepped through every pass and watched the model pick one word at a time."
+nerd = "End of recorded trace across all forward passes."
+
+# ---------------------------------------------------------------------------
+# Semantic keys (matched first)
+# ---------------------------------------------------------------------------
+
+[prompt]
+title = "Starting Text"
+body = "The model reads the words written so far and gets ready to guess what comes after \"{token}\"."
+nerd = "Pass input text ending at token {token!r}; context fed before BPE tokenization."
+
+[tokenize]
+title = "Chopping Text into Tokens"
+body = "Text is broken into bite-sized pieces (tokens) and tagged with vocabulary ID numbers, ending with \"{token}\"."
+nerd = "GPT-2 byte-level BPE tokenization converting UTF-8 text into integer token IDs."
+
+[embed]
+title = "Looking Up Word Fingerprints"
+body = "Each token pulls a unique row of {emb_dim} colored tiles from a dictionary, plus position tiles telling it where it sits in line."
+nerd = "Token embedding lookup + learned positional embedding addition -> (T, {emb_dim})."
+
+["block.summary"]
+title = "Layer {block_num} of {n_blocks} (Summary)"
+body = "Layer {block_num} gently nudges each word's tile pattern based on its neighbors and what the layer learned during training."
+nerd = "Transformer block {block_num}/{n_blocks} residual update: output - input over (T, {emb_dim})."
+
+["block.norm1"]
+title = "Layer {block_num}: Balancing the Tiles"
+body = "Before words compare notes, LayerNorm squeezes extreme values back into a calm, balanced range so nobody shouts too loud."
+nerd = "Pre-attention LayerNorm across {emb_dim} features (zero mean, unit variance + learned scale/shift)."
+
+["block.att.qkv"]
+title = "Layer {block_num}: Question, Label, Content"
+body = "Every word prepares three colored lists: a Question (what I'm looking for), a Label (what I offer), and Content (what I'll share)."
+nerd = "Linear Q, K, V projections multiplying normalized (T, {emb_dim}) input across {n_heads} head(s)."
+
+["block.att.scores"]
+title = "Layer {block_num}: Shining the Spotlight"
+body = "Across {n_heads} spotlight head(s), each word checks earlier words to decide who deserves attention. Future words stay hidden!"
+nerd = "Causal scaled dot-product attention softmax(Q K^T / sqrt(d_k)) across {n_heads} head(s)."
+
+["block.att.mix"]
+title = "Layer {block_num}: Blending What Matters"
+body = "Each word gathers a weighted blend of Content tiles from the earlier words the spotlight highlighted."
+nerd = "Multi-head attention context mix: attn_weights @ V reshaped back to (T, {emb_dim})."
+
+["block.att.out"]
+title = "Layer {block_num}: Wrapping Up Attention"
+body = "All {n_heads} spotlight viewpoints are stitched together by a weight grid into one updated tile strip per word."
+nerd = "Attention output projection linear layer: (T, {emb_dim}) x ({emb_dim}, {emb_dim}) -> (T, {emb_dim})."
+
+["block.resid1"]
+title = "Layer {block_num}: The Highway Add"
+body = "Instead of throwing old thoughts away, attention adds its update directly onto the main highway stream of tiles."
+nerd = "First residual connection: x_mid = x_shortcut + attn_update (prevents vanishing signals)."
+
+["block.norm2"]
+title = "Layer {block_num}: Re-balancing Again"
+body = "A second calm-down squeeze gets the tiles neatly centered before each word does some solo thinking."
+nerd = "Pre-MLP LayerNorm normalizing {emb_dim} features per token before feed-forward expansion."
+
+["block.ff.expand"]
+title = "Layer {block_num}: Expanding the Workspace"
+body = "Each word stretches its {emb_dim} tiles into a roomy {ff_dim}-tile scratchpad so subtle patterns have space to separate."
+nerd = "MLP expansion linear transform: (T, {emb_dim}) x ({emb_dim}, {ff_dim}) -> (T, {ff_dim})."
+
+["block.ff.act"]
+title = "Layer {block_num}: Filtering Signals (GELU)"
+body = "Negative tiles fade quietly toward zero while strong positive features stay bright, keeping only useful ideas."
+nerd = "GELU nonlinearity filtering negative pre-activations across (T, {ff_dim})."
+
+["block.ff.contract"]
+title = "Layer {block_num}: Packing Insights Back"
+body = "The {ff_dim}-tile scratchpad shrinks back down to {emb_dim} tiles so everything fits neatly on the highway again."
+nerd = "MLP contraction linear transform: (T, {ff_dim}) x ({ff_dim}, {emb_dim}) -> (T, {emb_dim})."
+
+["block.resid2"]
+title = "Layer {block_num}: Second Highway Add"
+body = "Solo thinking meets the highway: each word blends its new insight onto its running memory before leaving Layer {block_num}."
+nerd = "Second residual connection completing transformer block {block_num}/{n_blocks}."
+
+[final_norm]
+title = "Final Polish"
+body = "After all {n_blocks} layer(s), a final balance pass polishes every word's {emb_dim} tiles before voting on the next word."
+nerd = "Final LayerNorm applied after block {n_blocks} over {emb_dim} features."
+
+[lm_head]
+title = "Scoring Vocabulary Words"
+body = "The last token \"{token}\" lines up its final tiles against candidate words in the dictionary to compute raw scores."
+nerd = "Language-model head dot product on final token against candidate output columns -> logits."
+
+[next_token]
+title = "And the Next Word Is..."
+body = "Scores become probabilities, and \"{top_word}\" leads at {top_prob:.0%}, extending the text one word further."
+nerd = "Softmax probabilities over top candidates; top candidate={top_word!r} ({top_prob:.0%})."
+
 [generic]
+title = "Neural Layer Step"
+body = "Input number tiles flow through this layer's learned weights to create updated output tiles."
+nerd = "Generic tensor snapshot display for step."
+
+# ---------------------------------------------------------------------------
+# StepKind keys (fallback if semantic key is absent)
+# ---------------------------------------------------------------------------
+
+[PROMPT]
+title = "Input Prompt"
+body = "Reading the prompt ending at \"{token}\" before breaking it into pieces."
+nerd = "Prompt preparation step."
+
+[TOKENIZE]
+title = "Tokenization"
+body = "Splitting text into numbered vocabulary pieces ending with \"{token}\"."
+nerd = "Tokenization output sequence."
+
+[EMBEDDING]
+title = "Word & Position Fingerprints"
+body = "Combining word meaning tiles with position tiles across {emb_dim} features."
+nerd = "Token and position embedding sum over {emb_dim} dims."
+
+[LAYERNORM]
+title = "Balancing Tile Values"
+body = "Re-centering tile brightness so extreme values don't overwhelm the layer."
+nerd = "LayerNorm across {emb_dim} features."
+
+[LINEAR]
+title = "Weighted Multiplication"
+body = "Input tiles slide across a weight grid to produce a transformed row of output tiles."
+nerd = "Matrix multiplication X @ W -> Y."
+
+[QKV_PROJECTION]
+title = "Question, Label & Content"
+body = "Projecting each word into Question, Label, and Content tile strips across {n_heads} head(s)."
+nerd = "Q, K, V linear projections with {n_heads} attention head(s)."
+
+[ATTENTION_PATTERN]
+title = "Attention Spotlight"
+body = "Each word looks back at earlier words across {n_heads} spotlight head(s)."
+nerd = "Causal softmax attention weight map across {n_heads} head(s)."
+
+[ATTENTION_MIX]
+title = "Blending Attended Values"
+body = "Combining Content tiles using the attention spotlight weights."
+nerd = "Context vectors computed as attention weights times Value tiles."
+
+[ACTIVATION]
+title = "Nonlinear Filter"
+body = "Dimming negative tiles while keeping strong positive activations shining."
+nerd = "Elementwise activation function applied to hidden layer tiles."
+
+[RESIDUAL_ADD]
+title = "Highway Shortcut Add"
+body = "Adding the layer's update directly back onto the bypass highway stream."
+nerd = "Residual stream addition: output = shortcut + update."
+
+[BLOCK_SUMMARY]
+title = "Layer {block_num} Summary"
+body = "Comparing tiles entering vs leaving layer {block_num} of {n_blocks}."
+nerd = "Summarized transformer block transition ({block_num}/{n_blocks})."
+
+[LOGITS]
+title = "Word Scoreboard"
+body = "Matching the final tile pattern for \"{token}\" against candidate next words."
+nerd = "Output head logit projection on last token."
+
+[NEXT_TOKEN]
+title = "Next-Word Prediction"
+body = "Choosing the winning next token; top guess is \"{top_word}\" ({top_prob:.0%})."
+nerd = "Candidate probability ranking (top={top_word!r}, p={top_prob:.0%})."
+
+[GENERIC]
 title = "Computation Step"
-body = "The model processes vectors through this layer."
-nerd = "Generic operation step."
+body = "Visualizing tensor values captured at this stage of the model."
+nerd = "Fallback generic step view."

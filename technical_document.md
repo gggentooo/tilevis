@@ -176,7 +176,7 @@ The `validate_trace(trace, strict=False)` validator in `src/tilevis/core/validat
    - `model.n_layers >= 1`, `model.emb_dim >= 1`, `model.vocab_size >= 1`, `model.n_params >= 0`.
    - `block_index` on block steps must be within `[0, model.n_layers)`.
 2. **Numeric Finiteness & Dimensions:**
-   - Every tensor snapshot array must be purely finite: zero NaNs or Infinities allowed (`np.all(np.isfinite(data))`).
+   - Every tensor snapshot array must be non-empty (`size > 0` and all shape dimensions `> 0`) and purely finite: zero NaNs or Infinities allowed (`np.all(np.isfinite(data))`).
    - Snapshot data dimensionality must match axis count: `data.ndim == len(axes)`.
    - Each axis index count must match tensor dimensions: `len(ax.indices) == data.shape[d]`.
 3. **Axis Invariants & Monotonicity:**
@@ -278,6 +278,7 @@ tilevis record \
 
 # Play back a recorded trace (requires ONLY base install: numpy + pygame-ce)
 tilevis play traces/team_model.trace.npz --window borderless --theme dark
+tilevis play traces/team_model.trace.npz --headless   # offscreen verification
 
 # Preflight check on the presentation machine (fonts, display, trace integrity)
 tilevis check traces/team_model.trace.npz

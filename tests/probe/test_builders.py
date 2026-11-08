@@ -289,6 +289,15 @@ def test_output_step_builder(tiny_model_and_spec) -> None:
     assert len(lm_steps) == 1
     assert lm_steps[0].kind == StepKind.LOGITS.value
     assert lm_steps[0].stage == Stage.OUTPUT.value
+    assert lm_steps[0].meta["candidate_ids"] == [100, 200, 300]
+    assert len(lm_steps[0].tensors) == 3
+    for snap in lm_steps[0].tensors:
+        assert snap.data.size > 0
+        assert all(dim > 0 for dim in snap.data.shape)
+    assert lm_steps[0].tensors[1].data.shape == (32, 3)
+    assert lm_steps[0].tensors[1].axes[1].labels == ("·apple", "·banana", "·cherry")
+    assert lm_steps[0].tensors[2].data.shape == (1, 3)
+    assert lm_steps[0].tensors[2].axes[1].labels == ("·apple", "·banana", "·cherry")
 
     # Next token step
     tok_steps = builder.build(spec, buffer, model, plan, ctx, semantic=Semantic.NEXT_TOKEN.value)
@@ -296,3 +305,5 @@ def test_output_step_builder(tiny_model_and_spec) -> None:
     assert tok_steps[0].kind == StepKind.NEXT_TOKEN.value
     assert tok_steps[0].meta["chosen_id"] == 100
     assert tok_steps[0].detail_level == int(DetailLevel.STORY)
+    assert tok_steps[0].tensors[0].data.shape == (3,)
+    assert tok_steps[0].tensors[0].axes[0].labels == ("·apple", "·banana", "·cherry")

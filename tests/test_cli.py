@@ -51,11 +51,11 @@ def test_cli_record_error_on_missing_profile(capsys: pytest.CaptureFixture[str])
     assert "not found" in captured.err.lower()
 
 
-def test_cli_play_stub(capsys: pytest.CaptureFixture[str]) -> None:
-    code = main(["play", "traces/sample.trace.npz"])
+def test_cli_play_missing_file_returns_error(capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["play", "traces/nonexistent_sample.trace.npz", "--headless"])
     assert code == 1
     captured = capsys.readouterr()
-    assert "Subcommand 'play' is not implemented yet" in captured.out
+    assert "error:" in captured.err.lower()
 
 
 def test_cli_inspect_implemented(capsys: pytest.CaptureFixture[str]) -> None:

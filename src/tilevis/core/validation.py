@@ -99,7 +99,12 @@ def validate_trace(trace: Trace, strict: bool = False) -> list[str]:
             for _t_idx, t in enumerate(s.tensors):
                 t_ctx = f"Step {s.id}, tensor {t.name!r} ({t.role})"
 
-                # Check data finiteness
+                # Check non-empty tensor data and finiteness
+                if t.data.size == 0 or any(dim <= 0 for dim in t.data.shape):
+                    issues.append(
+                        f"{t_ctx}: tensor data must not have zero-sized dimensions "
+                        f"(shape {t.data.shape})"
+                    )
                 if not np.all(np.isfinite(t.data)):
                     issues.append(f"{t_ctx}: data contains NaN or infinite values")
 

@@ -86,7 +86,7 @@ class OutputStepBuilder:
         )
         tensors.append(s_in)
 
-        # Weight columns corresponding to top-k candidates
+        # Weight columns corresponding to top-k candidates (already candidate-ranked [0..k-1])
         if w_head is not None:
             w_top_k = w_head[:, cand_ids]  # (emb_dim, k)
             s_w, _nf2 = create_tensor_snapshot(
@@ -96,7 +96,6 @@ class OutputStepBuilder:
                 ["model_dim", "vocab"],
                 plan,
                 labels_by_axis={1: cand_tokens},
-                custom_indices_by_axis={1: cand_ids},
             )
             tensors.append(s_w)
 
@@ -119,12 +118,12 @@ class OutputStepBuilder:
             ["token", "vocab"],
             plan,
             labels_by_axis={0: (last_token_label,), 1: cand_tokens},
-            custom_indices_by_axis={1: cand_ids},
         )
         tensors.append(s_out)
 
         meta: dict[str, Any] = {
             "top_k": len(cand_ids),
+            "candidate_ids": [int(i) for i in cand_ids],
             "candidate_tokens": list(cand_tokens),
         }
         if nf1 or nf3:
@@ -174,7 +173,6 @@ class OutputStepBuilder:
             ["vocab"],
             plan,
             labels_by_axis={0: cand_tokens},
-            custom_indices_by_axis={0: cand_ids},
         )
 
         meta: dict[str, Any] = {

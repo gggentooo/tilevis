@@ -117,6 +117,23 @@ def test_nan_or_infinite_tensor_data() -> None:
     assert any("contains NaN or infinite values" in i for i in issues)
 
 
+def test_zero_sized_tensor_fails_validation() -> None:
+    empty_axis = AxisInfo("vocab", 0, np.array([], dtype=np.int64), labels=())
+    snap = make_snapshot("empty", TensorRole.PROBS, np.ones((1,), dtype=np.float32), ("vocab",))
+    object.__setattr__(snap, "data", np.empty((0,), dtype=np.float32))
+    object.__setattr__(snap, "axes", (empty_axis,))
+
+    step = Step(
+        "s1", StepKind.NEXT_TOKEN, Semantic.NEXT_TOKEN, Stage.OUTPUT, None, 1, None, (snap,)
+    )
+    pass_rec = PassRecord(0, (1,), ("hi",), "hi", steps=(step,))
+    model = ModelSpecInfo("m", "gpt_scratch", 1, 10, 2, 100, 100, 1000)
+    trace = Trace(1, "0.2.0", "2026-01-01T00:00:00Z", model, "prompt", {}, (pass_rec,))
+
+    issues = validate_trace(trace)
+    assert any("zero-sized dimensions" in i for i in issues)
+
+
 def test_tensor_axes_mismatch() -> None:
     trace = make_fake_trace(n_layers=1, n_passes=1)
     p0 = trace.passes[0]

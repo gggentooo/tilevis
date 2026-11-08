@@ -69,9 +69,43 @@ def _record_command(args: argparse.Namespace) -> int:
 
 def _play_command(args: argparse.Namespace) -> int:
     """Handle `tilevis play` subcommand."""
-    # Lazy import of render module when implemented in Phase 5
-    sys.stdout.write("Subcommand 'play' is not implemented yet (scheduled for Phase 5).\n")
-    return 1
+    from pathlib import Path
+
+    from tilevis.core.config import PresenterSettings
+    from tilevis.core.errors import TilevisError
+    from tilevis.core.serialization import load_trace
+    from tilevis.render.app import App
+
+    try:
+        trace = load_trace(args.trace)
+        presenter_arg = getattr(args, "presenter", None)
+        if presenter_arg is not None:
+            settings = PresenterSettings.from_toml(presenter_arg)
+        else:
+            default_toml = Path("presenter/default.toml")
+            settings = (
+                PresenterSettings.from_toml(default_toml)
+                if default_toml.is_file()
+                else PresenterSettings()
+            )
+
+        if getattr(args, "window", None) is not None:
+            settings.window_mode = str(args.window)
+        if getattr(args, "theme", None) is not None:
+            settings.theme = str(args.theme)
+        if getattr(args, "detail", None) is not None:
+            settings.detail_level = int(args.detail)
+            if settings.detail_level == 1:
+                settings.later_pass_level = 1
+
+        headless = bool(getattr(args, "headless", False))
+        app = App(trace, settings, headless=headless)
+        return app.run()
+    except TilevisError as exc:
+        if getattr(args, "verbose", False):
+            raise
+        sys.stderr.write(f"Error: {exc}\n")
+        return 1
 
 
 def _inspect_command(args: argparse.Namespace) -> int:
@@ -212,8 +246,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     play_parser.add_argument(
         "--presenter",
-        default="presenter/default.toml",
-        help="Path to presenter settings TOML file",
+        default=None,
+        help="Path to presenter settings TOML file (defaults to presenter/default.toml if present)",
     )
     play_parser.add_argument(
         "--window",
@@ -233,6 +267,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=[1, 2, 3],
         default=None,
         help="Detail level: 1 (Story), 2 (Standard), 3 (Deep)",
+    )
+    play_parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Initialize and render one headless frame without opening a visible window",
     )
     play_parser.set_defaults(func=_play_command)
 

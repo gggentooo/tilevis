@@ -1,0 +1,29 @@
+[window]
+mode = "borderless"      # borderless | windowed | exclusive
+display = 0
+fps = 60
+
+[view]
+theme = "dark"
+detail_level = 2
+detail_blocks = "first"  # first | first_last | all | none | list of ints
+later_pass_level = 1
+nerd_mode = false
+animation_speed = 1.0
+normalizer = "shared_step"
+locale = "en"
+
+[keys]
+next = ["right", "space", "return", "page down"]
+prev = ["left", "backspace", "page up"]
+next_stage = ["shift+right"]
+prev_stage = ["shift+left"]
+first = ["home"]
+last = ["end"]
+next_pass = ["ctrl+right"]
+cycle_detail = ["d"]
+toggle_nerd = ["n"]
+toggle_help = ["h", "f1"]
+cycle_theme = ["t"]
+toggle_autoplay = ["p"]
+toggle_fullscreen = ["f11"]

@@ -1,0 +1,24 @@
+[profile]
+name = "Tiny Random GPT (Demo & Test)"
+
+[model]
+code = "../ch07/01_main-chapter-code/previous_chapters.py"
+class = "GPTModel"
+# No checkpoint path: initialized randomly with seed
+seed = 123
+
+[model.config]
+vocab_size = 50257
+context_length = 120
+emb_dim = 12
+n_layers = 1
+n_heads = 2
+drop_rate = 0.0
+qkv_bias = false
+
+[text]
+tokenizer = "gpt2"
+template = "raw"
+
+[adapter]
+name = "auto"

@@ -1,0 +1,103 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tilevis"
+version = "0.1.0"
+description = "LLM Tile Visualizer: step-by-step colored-tile animation for GPT forward passes"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "LLM Tile Visualizer Contributors" },
+]
+license = { text = "MIT" }
+keywords = ["llm", "visualization", "transformer", "pygame", "deep-learning"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+dependencies = [
+    "numpy>=1.26",
+    "pygame-ce>=2.5",
+]
+
+[project.optional-dependencies]
+record = [
+    "torch>=2.3",
+    "tiktoken>=0.7",
+    "matplotlib>=3.8",
+]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "pytest-timeout",
+    "hypothesis",
+    "ruff",
+    "mypy",
+]
+build = [
+    "pyinstaller>=6",
+]
+
+[project.scripts]
+tilevis = "tilevis.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+timeout = 120
+addopts = "-ra -q"
+markers = [
+    "slow: slow running tests (e.g. GPT-2-small-shaped models)",
+    "windows: Windows-only behavior",
+    "manual: manual verification placeholders",
+    "perf: performance budget tests",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # Pyflakes
+    "W",    # pycodestyle warnings
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+    "RUF",  # Ruff-specific rules
+    "PTH",  # flake8-use-pathlib
+    "N",    # pep8-naming
+]
+ignore = []
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = "tilevis.probe.*"
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false

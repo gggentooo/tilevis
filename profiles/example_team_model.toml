@@ -1,0 +1,31 @@
+# Example model profile template for teammate checkpoints
+[profile]
+name = "Example Teammate Model"
+
+[model]
+# Path to model Python code relative to this profile file
+code = "../ch07/01_main-chapter-code/previous_chapters.py"
+class = "GPTModel"
+checkpoint = "../models/example_model.pth"
+allow_pickle = false
+seed = 42
+
+[model.config]
+# Optional config overrides: any omitted value will be inferred from checkpoint tensor shapes
+# n_heads cannot be inferred from shapes alone, so specify it if different from default
+n_heads = 4
+
+[model.lora]
+# Required only if the checkpoint contains unmerged LoRA tensors (A and B matrices)
+alpha = 16
+
+[text]
+tokenizer = "gpt2"
+template = "raw"  # "raw" or "alpaca"
+
+[adapter]
+name = "auto"     # "auto", "gpt_scratch", or "generic"
+
+[adapter.roles]
+# Optional module path overrides if modules were renamed
+# blocks = "trf_blocks"

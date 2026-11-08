@@ -1,0 +1,6 @@
+# English narration text catalogs for tilevis
+# Keyed by Semantic or StepKind
+[generic]
+title = "Computation Step"
+body = "The model processes vectors through this layer."
+nerd = "Generic operation step."

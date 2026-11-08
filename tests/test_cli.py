@@ -1,0 +1,93 @@
+"""Unit tests for command-line interface."""
+
+from __future__ import annotations
+
+import pytest
+
+import tilevis
+from tilevis.cli import build_parser, main
+
+
+def test_cli_version_flag(capsys: pytest.CaptureFixture[str]) -> None:
+    parser = build_parser()
+    with pytest.raises(SystemExit) as exc_info:
+        parser.parse_args(["--version"])
+    assert exc_info.value.code == 0
+    captured = capsys.readouterr()
+    assert f"tilevis {tilevis.__version__}" in captured.out
+
+
+def test_cli_help(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main(["--help"])
+    assert exc_info.value.code == 0
+    captured = capsys.readouterr()
+    assert "LLM Tile Visualizer" in captured.out
+    for sub in ["record", "play", "inspect", "check", "demo"]:
+        assert sub in captured.out
+
+
+def test_cli_no_args_prints_help(capsys: pytest.CaptureFixture[str]) -> None:
+    code = main([])
+    assert code == 0
+    captured = capsys.readouterr()
+    assert "usage:" in captured.out
+
+
+def test_cli_record_stub(capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(
+        [
+            "record",
+            "--profile",
+            "profiles/tiny_random.toml",
+            "--prompt",
+            "Hello",
+            "-o",
+            "out.trace.npz",
+        ]
+    )
+    assert code == 1
+    captured = capsys.readouterr()
+    assert "Subcommand 'record' is not implemented yet" in captured.out
+
+
+def test_cli_play_stub(capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["play", "traces/sample.trace.npz"])
+    assert code == 1
+    captured = capsys.readouterr()
+    assert "Subcommand 'play' is not implemented yet" in captured.out
+
+
+def test_cli_inspect_stub(capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["inspect", "--profile", "profiles/tiny_random.toml"])
+    assert code == 1
+    captured = capsys.readouterr()
+    assert "Subcommand 'inspect' is not implemented yet" in captured.out
+
+
+def test_cli_check_stub(capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["check"])
+    assert code == 1
+    captured = capsys.readouterr()
+    assert "Subcommand 'check' is not implemented yet" in captured.out
+
+
+def test_cli_demo_stub(capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["demo"])
+    assert code == 1
+    captured = capsys.readouterr()
+    assert "Subcommand 'demo' is not implemented yet" in captured.out
+
+
+def test_main_module_execution() -> None:
+    import subprocess
+    import sys
+
+    res = subprocess.run(
+        [sys.executable, "-s", "-m", "tilevis", "--version"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert res.returncode == 0
+    assert "tilevis 0.1.0" in res.stdout

@@ -120,9 +120,10 @@ def _inspect_command(args: argparse.Namespace) -> int:
 
 def _check_command(args: argparse.Namespace) -> int:
     """Handle `tilevis check` subcommand."""
-    # Preflight environment check when implemented in Phase 8
-    sys.stdout.write("Subcommand 'check' is not implemented yet (scheduled for Phase 8).\n")
-    return 1
+    from tilevis.check import run_checks
+
+    traces = getattr(args, "traces", None)
+    return run_checks(traces)
 
 
 def _demo_command(args: argparse.Namespace) -> int:

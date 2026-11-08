@@ -18,14 +18,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 | `0.5.0` | Phase 5 | Renderer foundation, navigation, tiles and generic scene | Completed (2026-11-08) |
 | `0.6.0` | Phase 6 | Dedicated scenes: matmul, attention, residual and prediction | Completed (2026-11-08) |
 | `0.7.0` | Phase 7 | Presentation UX, widgets, nerd mode and polish | Completed (2026-11-08) |
-| `1.0.0` | Phase 8 | Windows lecture-hall readiness, preflight, packaging and docs | Planned |
+| `1.0.0` | Phase 8 | Windows lecture-hall readiness, preflight, packaging and docs | Completed (2026-11-08) |
 
 ---
 
-## [Unreleased]
+## [1.0.0] - 2026-11-08 — Phase 8: Windows Lecture-Hall Readiness, Preflight, Packaging and Docs
+
+**Requirements addressed:** R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11
 
 ### Added
-- *(Phase 8 Windows lecture-hall readiness, preflight, packaging and docs pending.)*
+- `src/tilevis/check.py`: Comprehensive preflight environment and trace diagnostic suite implementing `check_python_version()`, `check_os_and_dpi()`, `check_pygame_packages()`, `check_bundled_fonts()`, `check_display_modes()`, `check_trace_file()`, and `run_checks()`. Features collision detection against legacy `pygame`, Windows High-DPI per-monitor awareness detection, bundled font file integrity verification, desktop display query, and trace telemetry (model spec, passes, steps, load time, and fidelity status).
+- `tilevis check`: Fully wired CLI subcommand reporting preflight status with actionable diagnostics, returning exit code 0 on all passes or 1 on any failure.
+- `scripts/play_demo.bat`: Lecture-hall Windows batch launcher configured with `chcp 65001` (UTF-8 console), preflight environment validation, demo playback launch, and error pause.
+- `scripts/play_demo.sh`: Cross-platform Unix/macOS shell script launcher for demo playback.
+- `packaging/tilevis_player.spec`: PyInstaller single-folder specification bundling only playback modules (`core`, `narration`, `render`, `check`), bundled fonts, sample traces, and default presenter configs, while explicitly excluding heavy recording packages (`torch`, `tiktoken`, `matplotlib`, `pytest`, `hypothesis`, `mypy`).
+- `packaging/README.md`: Contributor guide for generating standalone Windows executables with PyInstaller.
+- `README.md`: Complete presentation quick start guide including 60-second quick start, teammate profile & record guide, presenter cheat sheet (keyboard & mouse), and lecture-hall troubleshooting table.
+- Test suites: `tests/test_phase8_check_and_packaging.py` (10 tests covering clean preflight checks, missing trace, corrupt trace, missing font asset simulation, package collision diagnostics, PyInstaller spec structure & exclusions, clean-room Korean/space path playback, read-only directory playback, focus loss and F11 toggling, and CLI user-error hygiene).
+
+### Changed
+- `pyproject.toml` & `src/tilevis/__init__.py`: bumped version from `0.7.0` to `1.0.0`.
+- `tests/test_cli.py`: updated `test_cli_check_stub` to `test_cli_check_implemented` validating real preflight check CLI output and zero exit code.
+
+### Fixed
+- **Pytest output capture for preflight diagnostics:** Changed default `out: TextIO = sys.stdout` in `run_checks()` to dynamic `out is None: out = sys.stdout` lookup to ensure proper compatibility with test capture fixtures (`capsys`) and avoid binding to early import-time streams.
+- **Clean-room playback robustness:** Validated seamless playback from directories with Korean characters (`"2026 발표 자료/발표용 traces"`), spaces, and read-only media (locked USB drive simulation) with zero write attempts.
+- **Window focus & mode toggling hygiene:** Verified that window focus loss (`WINDOWFOCUSLOST`) clears pressed key modifiers without resetting presentation cursor position, and F11 fullscreen toggle preserves exact step state.
+
+### Verification & Test Summary
+- **Automated tests:** **318 passed** in **38.37 s** (`pytest -m "not manual" --cov=tilevis`, including `slow` and `perf` suites; **10** new tests added in `tests/test_phase8_check_and_packaging.py`), **91%** overall statement coverage across 7,916 statements (`core` 91%, `narration` 90%, `render` 91%, `check.py` 84%).
+- **PyTorch-free playback boundary:** Verified with `test_torch_free_suite.py` and `test_import_boundaries.py` that all playback modules (`core`, `narration`, `render`, `check`) execute with `torch` completely absent from `sys.modules`.
+- **Static checks:** `ruff check src tests` clean, `ruff format --check src tests` clean (145 files), `mypy --strict` on `core`/`narration`/`render` (54 files clean), `mypy` on `probe` and `check.py` (33 files clean), and `git diff ch07/` completely empty.
 
 ---
 

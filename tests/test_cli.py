@@ -65,11 +65,12 @@ def test_cli_inspect_implemented(capsys: pytest.CaptureFixture[str]) -> None:
     assert "Tilevis Model Inspection" in captured.out
 
 
-def test_cli_check_stub(capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_check_implemented(capsys: pytest.CaptureFixture[str]) -> None:
     code = main(["check"])
-    assert code == 1
+    assert code == 0
     captured = capsys.readouterr()
-    assert "Subcommand 'check' is not implemented yet" in captured.out
+    assert "Preflight Check" in captured.out
+    assert "Result: All preflight checks PASSED" in captured.out
 
 
 def test_cli_demo_implemented() -> None:

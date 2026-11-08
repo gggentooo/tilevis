@@ -1,0 +1,185 @@
+# Korean narration text catalogs for tilevis
+# Keyed by Semantic (lowercase/dotted), StepKind (UPPERCASE), or synthetic card key.
+
+[title]
+title = "거대 언어 모델의 두뇌 속으로"
+body = "{n_blocks}개 층(Layer)이 입력 프롬프트부터 다음 단어 예측까지 숫자 타일을 어떻게 변화시키는지 단계별로 살펴봅니다."
+nerd = "아키텍처 요약: {n_blocks}개 블록, emb_dim={emb_dim}, n_heads={n_heads}."
+
+[end]
+title = "생성 완료"
+body = "모든 순방향 패스를 거쳐 모델이 단어를 하나씩 예측하고 덧붙이는 과정을 모두 살펴보았습니다."
+nerd = "기록된 모든 순방향 패스 트레이스 종료."
+
+# ---------------------------------------------------------------------------
+# Semantic keys (matched first)
+# ---------------------------------------------------------------------------
+
+[prompt]
+title = "시작 텍스트"
+body = "모델이 지금까지 입력된 텍스트를 읽고 \"{token}\" 바로 뒤에 올 내용을 예측할 준비를 합니다."
+nerd = "토큰 {token!r}에서 끝나는 입력 텍스트; BPE 토큰화 전 컨텍스트 주입."
+
+[tokenize]
+title = "텍스트를 토큰 조각으로 분할"
+body = "텍스트가 고유 번호표(ID)가 붙은 색상 토큰 조각들로 분할되며, 마지막 토큰은 \"{token}\"입니다."
+nerd = "UTF-8 텍스트를 정수 토큰 ID 시퀀스로 변환하는 GPT-2 바이트 단위 BPE 토큰화."
+
+[embed]
+title = "단어 의미와 위치 정보 결합"
+body = "각 토큰 조각이 단어 사전에서 {emb_dim}개의 의미 타일을 꺼내고, 문장 속 위치를 나타내는 위치 타일을 더합니다."
+nerd = "토큰 임베딩 룩업 + 학습된 위치 임베딩(Positional Embedding) 합산 -> (T, {emb_dim})."
+
+["block.summary"]
+title = "레이어 {block_num} / {n_blocks} (요약)"
+body = "레이어 {block_num}에 들어온 타일과 나가는 타일을 비교합니다. 변화량 격자는 이 층이 각 단어의 특징을 어떻게 미세 조정했는지 보여줍니다."
+nerd = "트랜스포머 블록 {block_num}/{n_blocks} 잔차 업데이트: (T, {emb_dim}) 상의 output - input."
+
+["block.norm1"]
+title = "레이어 {block_num}: 값들의 균형 맞추기"
+body = "레이어 정규화(LayerNorm)가 불규칙하게 튀는 값들을 차분하고 고른 범위로 정리합니다. 학습된 배율(Scale)과 이동(Shift)도 함께 적용됩니다."
+nerd = "{emb_dim}개 피처에 대한 어텐션 전 LayerNorm (평균 0, 분산 1 정규화 + 학습 가능한 scale/shift)."
+
+["block.att.qkv"]
+title = "레이어 {block_num}: 질문, 키워드, 내용 분기"
+body = "입력 타일이 가중치 행렬을 거쳐 질문(Q: 찾고자 하는 대상), 키워드(K: 보유한 특성), 내용(V: 공유할 정보) 세 갈래로 나뉩니다."
+nerd = "정규화된 (T, {emb_dim}) 입력을 {n_heads}개 어텐션 헤드로 선형 사영하는 Q, K, V 프로젝션."
+
+["block.att.scores"]
+title = "레이어 {block_num}: 주목할 단어에 스포트라이트 비추기"
+body = "{n_heads}개의 어텐션 헤드에서 마지막 단어가 앞선 단어들을 향해 스포트라이트 호를 비추며, 아직 오지 않은 미래 단어는 가려집니다."
+nerd = "{n_heads}개 헤드에 걸친 인과적 스케일드 닷 프로덕트 어텐션 softmax(Q K^T / sqrt(d_k))."
+
+["block.att.mix"]
+title = "레이어 {block_num}: 주목받은 내용들의 조합"
+body = "스포트라이트(어텐션 가중치) 비율에 따라 이전 단어들의 내용(V) 타일을 섞어 하나의 풍부한 문맥 벡터를 만듭니다."
+nerd = "멀티헤드 어텐션 문맥 조합: attn_weights @ V 연산 후 (T, {emb_dim}) 형상으로 복원."
+
+["block.att.out"]
+title = "레이어 {block_num}: 어텐션 결과 통합하기"
+body = "가중치 행렬을 통과하며 {n_heads}개 어텐션 헤드의 시각을 하나로 엮어 각 단어별 새로운 특징 타일로 정리합니다."
+nerd = "어텐션 출력 프로젝션 선형 변환: (T, {emb_dim}) x ({emb_dim}, {emb_dim}) -> (T, {emb_dim})."
+
+["block.resid1"]
+title = "레이어 {block_num}: 잔차 연결 (고속도로 합산)"
+body = "기존 기억은 위쪽 우회 고속도로를 통해 온전히 보존되고, 새로운 어텐션 정보가 합류하여 함께 더해집니다."
+nerd = "첫 번째 잔차 연결(Residual Connection): x_mid = x_shortcut + attn_update (기울기 소실 방지)."
+
+["block.norm2"]
+title = "레이어 {block_num}: 피드포워드 전 정규화"
+body = "각 단어가 개별 심층 연산 공간으로 들어가기 전에 두 번째 균형 맞추기를 통해 값들을 다시 가지런히 정리합니다."
+nerd = "피드포워드 확장 전 {emb_dim}개 피처에 대한 사전 정규화 LayerNorm."
+
+["block.ff.expand"]
+title = "레이어 {block_num}: 생각의 공간 확장하기"
+body = "가중치를 거치며 각 단어의 특징이 {emb_dim}개에서 널찍한 {ff_dim}개의 임시 작업 공간(Scratchpad)으로 대폭 확장됩니다."
+nerd = "MLP 확장 선형 변환: (T, {emb_dim}) x ({emb_dim}, {ff_dim}) -> (T, {ff_dim})."
+
+["block.ff.act"]
+title = "레이어 {block_num}: 신호 필터링 (GELU)"
+body = "GELU 활성화 함수 곡선을 따라 음수 타일은 조용히 0에 가깝게 꺼지고, 밝고 유의미한 긍정적 특징들만 통과합니다."
+nerd = "(T, {ff_dim}) 상에서 음수 사전 활성화를 걸러내는 GELU 비선형 활성화 함수."
+
+["block.ff.contract"]
+title = "레이어 {block_num}: 핵심 정보 압축하기"
+body = "가중치를 거치며 넓었던 {ff_dim}개의 작업 타일이 다시 원래의 {emb_dim}개 고속도로 규격으로 압축 정리됩니다."
+nerd = "MLP 압축 선형 변환: (T, {ff_dim}) x ({ff_dim}, {emb_dim}) -> (T, {emb_dim})."
+
+["block.resid2"]
+title = "레이어 {block_num}: 두 번째 잔차 연결"
+body = "개별 연산 결과가 다시 우회 고속도로로 합류하여, 이전 기억과 새로운 통찰이 결합된 채 레이어 {block_num}을 마칩니다."
+nerd = "트랜스포머 블록 {block_num}/{n_blocks}을 완성하는 두 번째 잔차 연결."
+
+[final_norm]
+title = "최종 다듬기"
+body = "{n_blocks}개의 모든 레이어를 거친 후, 다음 단어 투표에 들어가기 전 마지막으로 각 단어의 {emb_dim}개 타일을 매끄럽게 정규화합니다."
+nerd = "마지막 블록 {n_blocks} 이후 {emb_dim}개 피처에 적용되는 최종 LayerNorm."
+
+[lm_head]
+title = "다음 후보 단어 점수 계산"
+body = "마지막 단어 \"{token}\"의 특징 타일과 전체 어휘의 가중치를 매칭하여 점수판에 각 후보 단어별 점수를 매깁니다."
+nerd = "마지막 토큰과 출력 가중치 간의 언어 모델 헤드 행렬곱 -> 로짓(Logits)."
+
+[next_token]
+title = "예측된 다음 단어는..."
+body = "점수가 확률 막대로 변환되어 1등 단어인 \"{top_word}\" ({top_prob:.0%})가 선택되어 문장 끝에 붙습니다!"
+nerd = "상위 후보 단어들에 대한 소프트맥스 확률 분포 (1위 후보={top_word!r}, p={top_prob:.0%})."
+
+[generic]
+title = "신경망 연산 단계"
+body = "입력 숫자 타일들이 이 층의 학습된 가중치를 통과하여 업데이트된 출력 타일을 만듭니다."
+nerd = "이 단계에서 캡처된 텐서 스냅샷 시각화."
+
+# ---------------------------------------------------------------------------
+# StepKind keys (fallback if semantic key is absent)
+# ---------------------------------------------------------------------------
+
+[PROMPT]
+title = "입력 프롬프트"
+body = "분할하기 전에 \"{token}\"에서 끝나는 입력 프롬프트를 표시합니다."
+nerd = "프롬프트 준비 단계."
+
+[TOKENIZE]
+title = "토큰화 조각"
+body = "텍스트를 \"{token}\"으로 끝나는 고유 어휘 토큰 조각들로 분할합니다."
+nerd = "토큰화 출력 시퀀스."
+
+[EMBEDDING]
+title = "단어 및 위치 임베딩"
+body = "{emb_dim}개 특징에 걸쳐 단어 의미 타일과 위치 타일을 더합니다."
+nerd = "{emb_dim}개 차원에 걸친 토큰 및 위치 임베딩의 합."
+
+[LAYERNORM]
+title = "타일 값 균형 맞추기"
+body = "극단적인 타일 값들을 차분하고 균형 잡힌 범위로 조정합니다."
+nerd = "{emb_dim}개 피처에 대한 LayerNorm."
+
+[LINEAR]
+title = "가중치 행렬 변환"
+body = "입력 타일들이 가중치 격자를 통과하며 새로운 출력 열을 채웁니다."
+nerd = "행렬 곱셈 X @ W -> Y."
+
+[QKV_PROJECTION]
+title = "질문, 키워드 및 내용 분기"
+body = "정규화된 타일을 {n_heads}개 헤드에 걸쳐 질문, 키워드, 내용 조각으로 분기합니다."
+nerd = "{n_heads}개 어텐션 헤드를 갖는 Q, K, V 선형 프로젝션."
+
+[ATTENTION_PATTERN]
+title = "어텐션 스포트라이트"
+body = "{n_heads}개 헤드에 걸쳐 어떤 앞선 단어가 중요한지 스포트라이트로 비추며 미래 단어는 숨겨집니다."
+nerd = "{n_heads}개 헤드에 걸친 인과적 소프트맥스 어텐션 가중치 맵."
+
+[ATTENTION_MIX]
+title = "주목된 값들의 조합"
+body = "어텐션 스포트라이트 가중치를 사용하여 내용(V) 타일들을 결합합니다."
+nerd = "어텐션 가중치와 Value 타일의 곱으로 계산된 문맥 벡터."
+
+[ACTIVATION]
+title = "비선형 필터"
+body = "활성화 곡선을 따라 음수 타일은 어둡게 줄이고 밝은 긍정 특징만 유지합니다."
+nerd = "은닉층 타일에 적용되는 요소별 활성화 함수."
+
+[RESIDUAL_ADD]
+title = "고속도로 잔차 합산"
+body = "레이어 업데이트를 우회 고속도로 흐름에 합류시켜 둘을 결합합니다."
+nerd = "잔차 스트림 합산: output = shortcut + update."
+
+[BLOCK_SUMMARY]
+title = "레이어 {block_num} 요약"
+body = "레이어 {block_num} / {n_blocks}에 걸쳐 들어오는 타일, 나가는 타일, 변화량을 비교합니다."
+nerd = "요약된 트랜스포머 블록 전이 ({block_num}/{n_blocks})."
+
+[LOGITS]
+title = "단어 점수판"
+body = "\"{token}\"의 최종 타일 패턴을 다음 후보 단어들과 매칭합니다."
+nerd = "마지막 토큰에 대한 출력 헤드 로짓 프로젝션."
+
+[NEXT_TOKEN]
+title = "다음 단어 예측"
+body = "우승 후보 단어를 선택합니다; 1위 후보는 \"{top_word}\" ({top_prob:.0%})입니다."
+nerd = "후보 확률 순위 (1위={top_word!r}, p={top_prob:.0%})."
+
+[GENERIC]
+title = "연산 단계"
+body = "모델의 이 단계에서 캡처된 텐서 값들을 시각화합니다."
+nerd = "폴백 일반 단계 뷰."

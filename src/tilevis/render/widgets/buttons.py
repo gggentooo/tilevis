@@ -64,6 +64,12 @@ class ButtonsWidget:
             (Command.NEXT, "Next >", player.can_next, False),
             (Command.CYCLE_DETAIL, f"Detail: {detail_name}", True, False),
             (Command.TOGGLE_NERD, nerd_label, True, settings.nerd_mode),
+            (
+                Command.TOGGLE_LOCALE,
+                f"Lang: {settings.locale.upper()}",
+                True,
+                settings.locale == "ko",
+            ),
             (Command.TOGGLE_HELP, "?", True, False),
         ]
 

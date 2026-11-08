@@ -12,13 +12,15 @@ from tilevis.core.trace import Fidelity, PassRecord, Step
 from tilevis.narration.captions import CaptionProvider
 
 
+@pytest.mark.parametrize("loc", ["en", "ko"])
 def test_every_semantic_and_stepkind_resolves_without_warnings(
+    loc: str,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Every enum member of Semantic and StepKind resolves cleanly with zero warnings."""
     trace = make_fake_trace(n_layers=2, emb_dim=16, n_tokens=4, n_passes=1, n_heads=2, ff_mult=4)
     pass_rec = trace.passes[0]
-    provider = CaptionProvider("en")
+    provider = CaptionProvider(loc)
 
     with caplog.at_level(logging.WARNING, logger="tilevis.narration"):
         # Verify all Semantics

@@ -34,6 +34,7 @@ DEFAULT_KEY_BINDINGS: dict[str, list[str]] = {
     "avg_heads": ["a"],
     "toggle_help": ["h", "f1"],
     "cycle_theme": ["t"],
+    "toggle_locale": ["l"],
     "speed_up": ["+", "=", "kp_plus"],
     "speed_down": ["-", "kp_minus"],
     "toggle_autoplay": ["p"],

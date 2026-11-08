@@ -99,6 +99,7 @@ The entire presentation can be driven using **either the keyboard or mouse alone
 | **Jump to Block** | — | Click Minimap segment (`B1`, `B2`, etc.) | Jump directly to any transformer block |
 | **Detail Level** | `D` | Click on-screen `Detail` button | Cycle detail: `Story` (collapsed) ↔ `Standard` ↔ `Deep` |
 | **Nerd Mode** | `N` | Click on-screen `Nerd` button | Toggle floating technical parameters & tensor stats |
+| **Language** | `L` | Click on-screen `Lang: EN` / `Lang: KO` button | Toggle caption language (English ↔ 한국어) |
 | **Theme** | `T` | — | Toggle color theme (`dark` ↔ `light`) |
 | **Autoplay** | `P` | — | Start/stop automated step progression |
 | **Speed** | `+` / `-` | — | Increase / decrease animation speed |

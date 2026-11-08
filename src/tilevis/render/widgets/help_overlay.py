@@ -131,6 +131,7 @@ class HelpOverlayWidget:
                     ("Detail Level (Story/Standard/Deep)", _fmt(Command.CYCLE_DETAIL, "D")),
                     ("Nerd Mode Overlay", _fmt(Command.TOGGLE_NERD, "N")),
                     ("Theme Toggle (Dark/Light)", _fmt(Command.CYCLE_THEME, "T")),
+                    ("Language Toggle (EN / KO)", _fmt(Command.TOGGLE_LOCALE, "L")),
                     ("Autoplay On / Off", _fmt(Command.TOGGLE_AUTOPLAY, "P")),
                     (
                         "Speed Up / Slow Down",

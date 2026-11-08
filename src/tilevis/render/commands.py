@@ -27,6 +27,7 @@ class Command(StrEnum):
     AVG_HEADS = "avg_heads"
     TOGGLE_HELP = "toggle_help"
     CYCLE_THEME = "cycle_theme"
+    TOGGLE_LOCALE = "toggle_locale"
     SPEED_UP = "speed_up"
     SPEED_DOWN = "speed_down"
     TOGGLE_AUTOPLAY = "toggle_autoplay"

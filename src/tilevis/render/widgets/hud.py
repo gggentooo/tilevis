@@ -180,8 +180,8 @@ class HudWidget:
             scale=scale,
         )
 
-        # 2. Interactive buttons on the right: width ~320-460px
-        buttons_w = max(180, min(scale.px(440, minimum=180), rect.width // 2))
+        # 2. Interactive buttons on the right: width ~320-540px
+        buttons_w = max(180, min(scale.px(540, minimum=180), rect.width * 3 // 5))
         buttons_rect = pygame.Rect(
             rect.right - pad_x - buttons_w,
             rect.y + 2,

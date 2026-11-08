@@ -22,7 +22,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
-## [1.0.0] - 2026-11-08 — Phase 8: Windows Lecture-Hall Readiness, Preflight, Packaging and Docs
+## [Unreleased]
+
+### Added
+- `src/tilevis/narration/locales/ko.toml`: Complete Korean narration catalog translating all 19 `Semantic` keys, 14 `StepKind` fallback keys, and synthetic title/end cards into intuitive, presentation-friendly Korean text while preserving exact `{placeholders}` for model metrics.
+- `src/tilevis/render/text.py`: Automatic Korean font fallback in `FontManager` detecting Hangul characters (`\uac00-\ud7af`, `\u1100-\u11ff`, `\u3130-\u318f`) and dynamically resolving platform Korean fonts (`AppleSDGothicNeo.ttc` / `AppleGothic.ttf` on macOS, `malgun.ttf` / `malgunbd.ttf` on Windows, `NotoSansCJK-Regular.ttc` / `NanumGothic.ttf` on Linux) or bundled `NotoSansKR-*.ttf` assets, with safe fallback to `NotoSans`.
+- `src/tilevis/render/commands.py`: `Command.TOGGLE_LOCALE = "toggle_locale"` presenter command.
+- `src/tilevis/render/input_map.py`: Configurable `L` key binding mapped to `Command.TOGGLE_LOCALE`.
+- `src/tilevis/render/widgets/buttons.py`: Interactive on-screen `Lang: EN` / `Lang: KO` toggle button with active state highlighting in Korean mode.
+- `src/tilevis/render/widgets/help_overlay.py`: Added `Language Toggle (EN / KO)` entry (`L`) to the presenter shortcut cheat sheet.
+- Test suites: `tests/render/test_korean_locale_and_toggle.py` (6 unit and headless integration tests covering translations, font manager rendering, keybinding, button interaction, and full playback sweeps), plus parametrized coverage in `tests/narration/test_captions.py`.
+
+### Changed
+- `src/tilevis/render/app.py`: Implemented `_toggle_locale()` method switching active `CaptionProvider` between `"en"` and `"ko"`, clearing font caches, and updating scene captions mid-presentation.
+- `src/tilevis/render/widgets/hud.py`: Expanded footer buttons area to accommodate 6 control buttons comfortably without clipping.
+- `presenter/default.toml` & `README.md`: Documented `toggle_locale = ["l"]` keybinding and on-screen button controls.
+
+---
 
 **Requirements addressed:** R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11
 

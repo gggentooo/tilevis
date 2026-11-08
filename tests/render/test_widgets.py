@@ -88,6 +88,7 @@ def test_buttons_layout_hover_and_click() -> None:
     assert Command.NEXT in cmds
     assert Command.CYCLE_DETAIL in cmds
     assert Command.TOGGLE_NERD in cmds
+    assert Command.TOGGLE_LOCALE in cmds
     assert Command.TOGGLE_HELP in cmds
 
     # Hover test

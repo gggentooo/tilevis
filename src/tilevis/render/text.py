@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import io
 import logging
+import os
+import sys
 from importlib import resources
+from pathlib import Path
 
 import pygame
 
@@ -34,6 +37,14 @@ _GLYPH_FALLBACKS: dict[str, str] = {
 }
 
 
+def _has_korean(text: str) -> bool:
+    """Return True if text contains Hangul syllables, jamo, or compatibility jamo."""
+    return any(
+        "\uac00" <= ch <= "\ud7a3" or "\u1100" <= ch <= "\u11ff" or "\u3130" <= ch <= "\u318f"
+        for ch in text
+    )
+
+
 class FontManager:
     """Loads bundled OFL TrueType fonts via importlib.resources and caches Font instances."""
 
@@ -42,10 +53,70 @@ class FontManager:
         self._font_bytes_cache: dict[tuple[str, bool], bytes] = {}
         self._font_cache: dict[tuple[str, bool, int], pygame.font.Font] = {}
         self._glyph_ok_cache: dict[tuple[str, bool, str], bool] = {}
+        self._korean_font_path: dict[bool, str | None] = {}
 
     def _ensure_font_init(self) -> None:
         if not pygame.font.get_init():
             pygame.font.init()
+
+    def _find_korean_font(self, bold: bool) -> str | None:
+        """Find an available Korean font path on the host system or bundled assets."""
+        if bold in self._korean_font_path:
+            return self._korean_font_path[bold]
+
+        # 1. Check bundled assets first
+        bundled_names = (
+            ("NotoSansKR-Bold.ttf", "NotoSansKR-Regular.ttf")
+            if bold
+            else ("NotoSansKR-Regular.ttf", "NotoSansKR-Bold.ttf")
+        )
+        for name in bundled_names:
+            try:
+                res = resources.files("tilevis.assets.fonts").joinpath(name)
+                if res.is_file():
+                    path_str = str(res)
+                    self._korean_font_path[bold] = path_str
+                    return path_str
+            except Exception:
+                pass
+
+        # 2. Check platform-specific common fonts
+        candidates: list[Path] = []
+        if sys.platform == "darwin":
+            candidates = [
+                Path("/System/Library/Fonts/AppleSDGothicNeo.ttc"),
+                Path("/System/Library/Fonts/Supplemental/AppleGothic.ttf"),
+            ]
+        elif sys.platform == "win32":
+            windir = Path(os.environ.get("WINDIR", r"C:\Windows"))
+            fonts_dir = windir / "Fonts"
+            if bold:
+                candidates = [
+                    fonts_dir / "malgunbd.ttf",
+                    fonts_dir / "malgun.ttf",
+                    fonts_dir / "gulim.ttc",
+                ]
+            else:
+                candidates = [
+                    fonts_dir / "malgun.ttf",
+                    fonts_dir / "malgunbd.ttf",
+                    fonts_dir / "gulim.ttc",
+                ]
+        else:  # Linux / Unix
+            candidates = [
+                Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+                Path("/usr/share/fonts/truetype/nanum/NanumGothic.ttf"),
+                Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
+            ]
+
+        for cand in candidates:
+            if cand.is_file():
+                cand_str = str(cand)
+                self._korean_font_path[bold] = cand_str
+                return cand_str
+
+        self._korean_font_path[bold] = None
+        return None
 
     def _load_bytes(self, family: str, bold: bool) -> bytes:
         norm_family = family.strip().lower().replace(" ", "")
@@ -77,17 +148,28 @@ class FontManager:
         *,
         bold: bool = False,
         family: str | None = None,
+        is_korean: bool = False,
     ) -> pygame.font.Font:
         """Return cached pygame.font.Font for the requested family, weight, and pixel size."""
         self._ensure_font_init()
         fam = family or self.default_family
         norm_fam = fam.strip().lower().replace(" ", "")
         px = max(8, int(size_px))
-        cache_key = (norm_fam, bold, px)
+        cache_key = ("korean" if is_korean else norm_fam, bold, px)
 
         cached = self._font_cache.get(cache_key)
         if cached is not None:
             return cached
+
+        if is_korean:
+            kr_path = self._find_korean_font(bold)
+            if kr_path is not None:
+                try:
+                    font = pygame.font.Font(kr_path, px)
+                    self._font_cache[cache_key] = font
+                    return font
+                except Exception as exc:
+                    logger.warning("Failed to load Korean font from %r: %s", kr_path, exc)
 
         raw_bytes = self._load_bytes(fam, bold)
         font = pygame.font.Font(io.BytesIO(raw_bytes), px)
@@ -97,6 +179,8 @@ class FontManager:
     def clear_cache(self) -> None:
         """Clear cached Font objects (e.g. if pygame display re-initializes)."""
         self._font_cache.clear()
+        self._glyph_ok_cache.clear()
+        self._korean_font_path.clear()
 
     def _prepare_text(
         self,
@@ -144,7 +228,8 @@ class FontManager:
         max_width: int | None = None,
     ) -> pygame.Surface:
         """Render single-line text, optionally truncating with ellipsis to fit max_width."""
-        font = self.get(size_px, bold=bold, family=family)
+        is_kr = _has_korean(text)
+        font = self.get(size_px, bold=bold, family=family, is_korean=is_kr)
         display_text = self._prepare_text(text, bold=bold, family=family)
         if max_width is not None and max_width > 0 and font.size(display_text)[0] > max_width:
             display_text = self.truncate(display_text, max_width, size_px, bold=bold, family=family)
@@ -160,7 +245,8 @@ class FontManager:
         family: str | None = None,
     ) -> str:
         """Truncate text with '...' if its rendered pixel width exceeds max_width."""
-        font = self.get(size_px, bold=bold, family=family)
+        is_kr = _has_korean(text)
+        font = self.get(size_px, bold=bold, family=family, is_korean=is_kr)
         clean_text = self._prepare_text(text, bold=bold, family=family)
         if max_width <= 0:
             return ""
@@ -191,7 +277,8 @@ class FontManager:
         """Word-wrap text into lines fitting within max_width pixels."""
         if max_width <= 0 or not text:
             return []
-        font = self.get(size_px, bold=bold, family=family)
+        is_kr = _has_korean(text)
+        font = self.get(size_px, bold=bold, family=family, is_korean=is_kr)
         prepared = self._prepare_text(text, bold=bold, family=family)
         lines: list[str] = []
 

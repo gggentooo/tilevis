@@ -170,6 +170,14 @@ class App:
         self.fonts = FontManager(self.theme.font_family)
         self._enter_current_step(animate=False)
 
+    def _toggle_locale(self) -> None:
+        """Toggle caption locale (en <-> ko) and re-render current step."""
+        next_locale = "ko" if self.settings.locale == "en" else "en"
+        self.settings.locale = next_locale
+        self.captions = CaptionProvider(next_locale)
+        self.fonts.clear_cache()
+        self._enter_current_step(animate=False)
+
     def dispatch_command(self, cmd: Command) -> None:
         """Execute a high-level presenter Command."""
         if cmd == Command.QUIT:
@@ -247,6 +255,10 @@ class App:
 
         if cmd == Command.CYCLE_THEME:
             self._cycle_theme()
+            return
+
+        if cmd == Command.TOGGLE_LOCALE:
+            self._toggle_locale()
             return
 
         if cmd == Command.SPEED_UP:

@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 |---|---|---|---|
 | `0.0.0` | Phase 0 | Architecture, Requirements & Specification | Completed (2026-11-08) |
 | `0.1.0` | Phase 1 | Project scaffolding and tooling | Completed (2026-11-08) |
-| `0.2.0` | Phase 2 | Core data contract and trace format | Planned |
+| `0.2.0` | Phase 2 | Core data contract and trace format | Completed (2026-11-08) |
 | `0.3.0` | Phase 3 | Model loading, config inference, text and adapters | Planned |
 | `0.4.0` | Phase 4 | Probe: hooks, builders, reduction, generation, recorder | Planned |
 | `0.5.0` | Phase 5 | Renderer foundation, navigation, tiles and generic scene | Planned |
@@ -25,7 +25,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
-- *(Phase 2 core contract pending.)*
+- *(Phase 3 model loading, config inference, text and adapters pending.)*
+
+---
+
+## [0.2.0] - 2026-11-08 — Phase 2: Core Data Contract and Trace Format
+
+**Requirements addressed:** R1, R2, R3, R4, R7, R8, R11
+
+### Added
+- `src/tilevis/core/kinds.py`: Vocabulary enumerations (`StepKind`, `Semantic`, `DetailLevel`, `Stage`, `TensorRole`) implemented as `StrEnum`s with tolerant `parse_kind()` fallback for forward compatibility.
+- `src/tilevis/core/trace.py`: Core frozen slotted dataclasses (`Trace`, `PassRecord`, `Step`, `TensorSnapshot`, `AxisInfo`, `TensorStats`, `Prediction`, `Fidelity`, `ModelSpecInfo`) with read-only array protection (`arr.setflags(write=False)`) and query helpers (`Trace.step_by_id`, `PassRecord.steps_for_block`, `Step.by_role`).
+- `src/tilevis/core/validation.py`: `validate_trace(trace, strict=False)` verifying schema versions, numeric finiteness, axis alignment, label correspondence, step uniqueness, single terminal `NEXT_TOKEN` positioning, and descending prediction probabilities.
+- `src/tilevis/core/config.py`: `PresenterSettings` and `RecordSettings` dataclasses, safe TOML loader `load_toml()`, and `warn_unknown_keys()`.
+- `src/tilevis/core/serialization.py`: Atomic, compressed NumPy/JSON archive serializer (`save_trace`) and loader (`load_trace`) with `allow_pickle=False`, UTF-8 JSON manifest extraction, and sequential `MIGRATIONS` execution.
+- `tests/fixtures/fake_traces.py`: Torch-free synthetic trace generator `make_fake_trace()` producing valid, reproducible traces of any model architecture shape.
+- Comprehensive test suites under `tests/core/`:
+  - `test_trace_dataclasses.py`: Dataclass immutability, read-only NumPy array enforcement, docstring examples, query helpers.
+  - `test_config.py`: Default configurations, TOML loading, and unknown key warnings.
+  - `test_validation.py`: Invariant validation rules with positive and negative test cases.
+  - `test_serialization.py`: Lossless roundtrip, Unicode/Korean path and tokens handling, corrupted zip rejection, missing array/manifest handling, pickle rejection, atomic write rollback, unknown step kind tolerance.
+  - `test_property_serialization.py`: Hypothesis property-based testing across randomized valid traces.
+  - `test_compat_roundtrip.py`: Lossless roundtrip across all 8 `compat_matrix` architecture shapes and large trace budget verification (<50MB, <2s load).
+
+### Decisions & Rationale
+- **Atomic File Writing:** Writes to a temporary `.trace.npz.tmp.<pid>.npz` archive before atomic rename (`Path.replace`), ensuring interrupted or failed writes never corrupt existing traces on disk.
+- **Read-Only NumPy Enforcements:** All snapshot arrays have their flags set to `write=False` upon dataclass initialization, preventing accidental mutation during playback.
+- **Strict Pickle Rejection:** Pre-verifies archive entries using `allow_pickle=False` to reject untrusted or malicious NumPy pickled objects when opening traces.
+- **Forward-Compatible Kinds:** String-based enums with `parse_kind()` ensure newer traces with novel layer kinds load without crashing, falling back to generic handling.
+
+### Verification & Test Summary
+- **Automated tests:** 66 passed in 1.32s, 92% coverage across active modules (`core` modules achieve 90%–100% coverage).
+- **Compatibility matrix:** All 8 architecture shapes (`tiny_ch07`, `small_bias`, `heads_8_of_64`, `head_dim_1`, `deep_narrow`, `lora_small`, `wrapped_ckpt`, `gpt2_small_shape`) round-trip losslessly.
+- **Performance budgets:** Fake trace shaped like `gpt2_small_shape` (12 layers, 3 passes, 8 tokens, 64 features) achieves 0.28 MB archive size (well below the 50 MB budget) and loads/validates in 0.05s (well below the 2.0s budget).
+- **Weakness probes:**
+  - Hypothesis property fuzzing verifies random valid traces roundtrip identically.
+  - Corrupted archives, missing manifests, and missing arrays raise `TraceFormatError`, never unhandled internal exceptions.
+  - Untrusted pickle objects inside archives are rejected with `TraceFormatError`.
+  - Mid-write IOErrors leave existing trace files intact.
+  - Newer schema versions trigger clear update prompts.
+  - Unknown step kinds load safely without errors.
+  - Korean tokens, emoji, newline characters, and non-ASCII directory paths round-trip losslessly.
+- **Static checks:** `ruff check` (clean), `ruff format --check` (clean), `mypy --strict` on `core`, `narration`, `render` (clean), and `mypy` on `probe` (clean).
+
+### Known Issues & Deferred Items
+- Probe hook implementation and live PyTorch model recording deferred to Phase 4.
 
 ---
 

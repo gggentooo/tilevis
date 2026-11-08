@@ -167,6 +167,29 @@ The `Trace` hierarchy in `src/tilevis/core/trace.py` is the **sole interface** b
 - Entries `a0`, `a1`, … store the raw `float32` / `int64` arrays.
 - **Schema evolution:** breaking changes to `Trace` must increment `TRACE_SCHEMA_VERSION`, add a pure dictionary transformer in `core/serialization.py:MIGRATIONS`, update `validate_trace()`, and log a `**BREAKING**` note in `changelog.md`. Unknown `StepKind` or `Semantic` strings from newer minor versions never crash—they fall back to `GenericScene` and generic captions.
 
+### 4.4 Trace Invariant Validation Rules
+
+The `validate_trace(trace, strict=False)` validator in `src/tilevis/core/validation.py` enforces structural and numerical invariants:
+
+1. **Schema & Model Consistency:**
+   - `schema_version` must equal `TRACE_SCHEMA_VERSION` (currently `1`).
+   - `model.n_layers >= 1`, `model.emb_dim >= 1`, `model.vocab_size >= 1`, `model.n_params >= 0`.
+   - `block_index` on block steps must be within `[0, model.n_layers)`.
+2. **Numeric Finiteness & Dimensions:**
+   - Every tensor snapshot array must be purely finite: zero NaNs or Infinities allowed (`np.all(np.isfinite(data))`).
+   - Snapshot data dimensionality must match axis count: `data.ndim == len(axes)`.
+   - Each axis index count must match tensor dimensions: `len(ax.indices) == data.shape[d]`.
+3. **Axis Invariants & Monotonicity:**
+   - `AxisInfo.indices` must be strictly increasing with values strictly within `[0, full_size)`.
+   - `token` axes must have string `labels` whose count matches the displayed token length.
+4. **Step Identity & Pipeline Invariants:**
+   - Step IDs must be non-empty and unique across the entire trace.
+   - Detail levels must be valid (`STORY = 1`, `STANDARD = 2`, `DEEP = 3`).
+   - Each forward pass may contain at most one `NEXT_TOKEN` step, and if present, it must be the final (terminal) step of that pass.
+5. **Prediction Distribution:**
+   - Candidate array lengths (`candidate_ids`, `candidate_tokens`, `candidate_probs`) must be identical.
+   - Candidate probabilities must lie in `[0.0, 1.0]` and be sorted in strictly descending order.
+
 ---
 
 ## 5. Probe: Dynamic Model Loading and Hooking

@@ -90,4 +90,4 @@ def test_main_module_execution() -> None:
         check=False,
     )
     assert res.returncode == 0
-    assert "tilevis 0.1.0" in res.stdout
+    assert f"tilevis {tilevis.__version__}" in res.stdout

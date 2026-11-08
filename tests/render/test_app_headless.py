@@ -18,6 +18,7 @@ from tilevis.core.kinds import DetailLevel, Stage, TensorRole
 from tilevis.core.serialization import load_trace
 from tilevis.core.trace import Fidelity, Step
 from tilevis.render.app import DOUBLE_ESC_WINDOW_SEC, App
+from tilevis.render.scenes.embedding import EmbeddingScene
 from tilevis.render.scenes.generic import GenericScene
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -91,7 +92,7 @@ def test_headless_app_phase4_sample_traces(sample_name: str) -> None:
     # Walk full playlist cleanly and test runtime toggles along the way
     steps_visited = 1
     while app.player.cursor < total - 1:
-        app.tick(1.0, [])  # complete animation naturally
+        app.tick(2.0, [])  # complete 0.8-1.5s animation naturally
         assert not app.scene.is_animating
         app.draw()
         app.tick(0.016, [_key_event(pygame.K_SPACE)])
@@ -128,17 +129,32 @@ def test_extreme_viewports_and_tight_downsampling(vw: int, vh: int) -> None:
     trace = make_fake_trace(n_layers=1, emb_dim=64, n_tokens=24, n_passes=1, n_heads=4)
     app = App(trace, PresenterSettings(include_title=False), headless=True, viewport_size=(vw, vh))
 
-    # Jump to embedding step (has 3 tensors side by side -> tight on 800x600)
+    # Jump to embedding step (has 3 wide tensors side by side -> tight on 800x600)
     app.player.goto("p0.embed")
     app._enter_current_step(animate=False)
     app.tick(0.016, [])
     app.draw()
 
-    assert isinstance(app.scene, GenericScene)
+    assert isinstance(app.scene, EmbeddingScene)
     if vw == 800:
         notes = app.scene.downsample_notes
         assert notes, "Expected automatic display downsampling in 800x600 tight stage"
         assert any("showing" in n and " of " in n for n in notes)
+
+        # Also verify GenericScene tight downsampling via an unknown 3-tensor step
+        embed_step = trace.step_by_id("p0.embed")
+        generic_wide = replace(embed_step, id="p0.future_wide", kind="future_wide")
+        mod_pass = replace(trace.passes[0], steps=(generic_wide,))
+        g_app = App(
+            replace(trace, passes=(mod_pass,)),
+            PresenterSettings(include_title=False, include_end=False),
+            headless=True,
+            viewport_size=(vw, vh),
+        )
+        g_app.draw()
+        assert isinstance(g_app.scene, GenericScene)
+        assert g_app.scene.downsample_notes
+        assert any("showing" in n and " of " in n for n in g_app.scene.downsample_notes)
 
 
 def test_rapid_resize_mid_playback_and_animation() -> None:
@@ -275,11 +291,17 @@ def test_double_esc_quit_timing_state_machine() -> None:
 
 
 def test_attention_head_cycling_and_hit_test_in_generic_scene() -> None:
-    """GenericScene handles head cycling on 3-D tensors and produces valid TileGrid tooltips."""
-    trace = make_fake_trace(n_layers=1, emb_dim=16, n_tokens=4, n_passes=1, n_heads=4)
-    app = App(trace, PresenterSettings(), headless=True, viewport_size=(1280, 720))
-    assert app.player.goto("p0.b0.att.scores")
-    app._enter_current_step(animate=False)
+    """GenericScene handles head cycling on unknown 3-D tensors and produces valid tooltips."""
+    base = make_fake_trace(n_layers=1, emb_dim=16, n_tokens=4, n_passes=1, n_heads=4)
+    attn_step = base.step_by_id("p0.b0.att.scores")
+    generic_3d = replace(attn_step, id="p0.future_3d", kind="future_3d")
+    mod_trace = replace(base, passes=(replace(base.passes[0], steps=(generic_3d,)),))
+    app = App(
+        mod_trace,
+        PresenterSettings(include_title=False, include_end=False),
+        headless=True,
+        viewport_size=(1280, 720),
+    )
     app.draw()
 
     assert isinstance(app.scene, GenericScene)

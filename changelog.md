@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 | `0.3.0` | Phase 3 | Model loading, config inference, text and adapters | Completed (2026-11-08) |
 | `0.4.0` | Phase 4 | Probe: hooks, builders, reduction, generation, recorder | Completed (2026-11-08) |
 | `0.5.0` | Phase 5 | Renderer foundation, navigation, tiles and generic scene | Completed (2026-11-08) |
-| `0.6.0` | Phase 6 | Dedicated scenes: matmul, attention, residual and prediction | Planned |
+| `0.6.0` | Phase 6 | Dedicated scenes: matmul, attention, residual and prediction | Completed (2026-11-08) |
 | `0.7.0` | Phase 7 | Presentation UX, widgets, nerd mode and polish | Planned |
 | `1.0.0` | Phase 8 | Windows lecture-hall readiness, preflight, packaging and docs | Planned |
 
@@ -25,7 +25,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
-- *(Phase 6 dedicated scenes: matmul, attention, residual and prediction pending.)*
+- *(Phase 7 presentation UX, widgets, nerd mode and polish pending.)*
+
+---
+
+## [0.6.0] - 2026-11-08 — Phase 6: Dedicated Scenes: Matmul, Attention, Residual and Prediction
+
+**Requirements addressed:** R1, R2, R3, R4, R5, R7, R8, R9, R10, R11
+
+### Added
+- `src/tilevis/render/scenes/common.py`: `BaseScene`, `GridCard`, `HitRegion`, cached `draw_grid_card()` with $O(1)$ rectangular sweep reveal, geometric operators (`draw_arrow`, `draw_operator_symbol`, `draw_bezier_arc`), `place_grid_in_card()`, and `format_token_chip()`.
+- Dedicated animated `Scene` implementations registered via `@SCENES.register(...)` across all 14 `StepKind` values plus synthetic `TITLE` and `END` cards:
+  - `title.py`: `TitleScene` (`TITLE`, prompt preview token pills and friendly layer/parameter badge summary) and `EndScene` (`END`, full generated sequence highlighted by pass with EOS indicator).
+  - `tokenize.py`: `PromptScene` (`PROMPT`, framed prompt card) and `TokenizeScene` (`TOKENIZE`, source text splitting into colored token chips with ID badges).
+  - `embedding.py`: `EmbeddingScene` (`EMBEDDING`, color-coded token shelf fanning into `token_vectors` + `position_vectors` -> `Word Meaning`, supporting `pos_emb=None` and dense `emb_dim` views).
+  - `layernorm.py`: `LayerNormScene` (`LAYERNORM`, before/after activation cards with spread gauges and `scale`/`shift` parameter strips).
+  - `matmul.py`: `MatmulScene` (`LINEAR`, `(T, in) × (in, out) = (T, out)` matrix multiplication with optional `bias` strip, synchronized column-sweep highlight across weights and outputs, and semantic framing for `att.out`, `ff.expand`, and `ff.contract`).
+  - `qkv.py`: `QkvProjectionScene` (`QKV_PROJECTION`, shared input branching through three weight panels into `Q` Question, `K` Label, and `V` Content tile grids).
+  - `attention.py`: `AttentionPatternScene` (`ATTENTION_PATTERN`, pre-baked causal upper-triangle greyed $T \times T$ heatmap, curved spotlight attention arcs for the newest token, interactive head wrap `]` / `[`, and head-average toggle `A`).
+  - `attention_mix.py`: `AttentionMixScene` (`ATTENTION_MIX`, attention-weighted mixing of `V` rows into context vectors).
+  - `activation.py`: `ActivationScene` (`ACTIVATION`, pre/post GELU panels highlighting muted negative activations alongside a procedural GELU curve badge).
+  - `residual.py`: `ResidualScene` (`RESIDUAL_ADD`, `shortcut` highway stream + `update` stream sliding together into summed output tiles).
+  - `block_summary.py`: `BlockSummaryScene` (`BLOCK_SUMMARY`, block input -> output alongside the `output - input` delta grid for collapsed blocks).
+  - `logits.py` & `prediction.py`: `LogitsScene` (`LOGITS`, final token's vector × top-k candidate rows of `out_head`) and `PredictionScene` (`NEXT_TOKEN`, staggered horizontal probability bars sorted by probability, sampled/greedy winner badge animating into the running sentence, and theme-colored confetti).
+- Test suites: `tests/render/test_scenes_contract.py` (33 parameterized scene contract tests over all 16 `SCENES` keys × `dark`/`light` themes), `tests/render/test_scenes_specific.py` (6 scene behavior and edge-shape tests), `tests/render/test_phase6_matrix_and_perf.py` (27 tests covering `StepPlayer` animation-skip regression, all 8 `compat_matrix` configs across `STORY`/`STANDARD`/`DEEP`, 200-command rapid input mashing at `800×600`/`1920×1080`/`3440×1440`, and `@pytest.mark.perf` `1920×1080` enter/frame budgets), and `tests/integration/test_phase6_recorded_scenes.py` (8 real `TraceRecorder` -> headless playback integration tests including `@pytest.mark.slow` `gpt2_small_shape`).
+
+### Changed
+- `pyproject.toml` & `src/tilevis/__init__.py`: bumped version from `0.5.0` to `0.6.0`.
+- `src/tilevis/render/scenes/registry.py`: loaded all 13 dedicated scene modules after `SCENES` creation so every `StepKind` self-registers cleanly while retaining `GenericScene` fallback.
+- `src/tilevis/narration/locales/en.toml`: refined metaphor-driven captions and nerd-mode summaries to align with the visual scenes while preserving format placeholders.
+- `tests/render/test_app_headless.py`: adjusted animation-completion tick budget from `1.0 s` to `2.0 s` to match Phase 6 scene durations (`0.85–1.35 s × speed`).
+
+### Fixed
+- **Dense-model `EMBEDDING` token shelf (`embedding.py`):** Replaced a `pitch >= 18` visibility cutoff that hid token chips at `emb_dim >= 48` with a stacked token shelf and color-coded connection strands (up to 12 tokens) so `small_bias` and `gpt2_small_shape` retain clear token-to-row attribution.
+- **`ATTENTION_PATTERN` label & arc separation (`attention.py`):** Positioned spotlight percentage labels to the right of token pills and guarded bottom column headers (`cell_px >= 42`) to eliminate text-on-arc and adjacent-token overlap.
+- **`LOGITS` `800×600` header clearance (`logits.py`):** Increased score-board header height (`sb_hdr_h`) so the logit tile strip stays cleanly separated from `"Tile scores per candidate"` on compact displays.
+- **Small-probability readout clipping (`prediction.py`):** Formatted probabilities `< 0.005` (`0.5%`) as `.2%` and widened `pct_w` so low un-finetuned probabilities (e.g., `"0.02% [PICKED]"`) render legibly without right-edge clipping.
+- **Tofu-free geometric operators (`common.py`):** Rendered arrows, `+`, `×`, `=`, and attention arcs using procedural `pygame.draw` primitives and ASCII/escaped labels so bundled `NotoSans` fonts avoid missing-glyph boxes.
+
+### Decisions & Rationale
+- **Pre-baked `TileGrid` cards + $O(1)$ reveal sweeps (`scenes/common.py`):** Static colormapped surfaces and causal masks are built once in `enter()`, while `update()`/`draw()` only update progress floats and rectangular clip sweeps. This keeps `1920×1080` worst-case `enter()` at `10.14 ms` (`< 100 ms` budget) and worst-case animation frames at `1.02 ms` (`< 16 ms` budget).
+- **Additive self-registration via `scenes/registry.py`:** Each dedicated scene registers via `@SCENES.register(...)` on module import, avoiding `if/elif` branching while preserving seamless `GenericScene` fallback for unknown future `StepKind`s.
+
+### Verification & Test Summary
+- **Automated tests:** **281 passed** in **31.16 s** (`pytest -m "not manual" --cov=tilevis`, including `slow` and `perf` tests; **74** new tests added across `tests/render/` and `tests/integration/`), **91%** overall statement coverage across 7,134 statements (`prediction.py` 98%, `layernorm.py` 98%, `residual.py` 97%, `attention_mix.py` 97%, `block_summary.py` 97%, `title.py` 97%, `embedding.py` 96%, `qkv.py` 96%, `activation.py` 95%, `common.py` 95%, `attention.py` 94%, `matmul.py` 94%, `tokenize.py` 92%, `logits.py` 90%).
+- **Compatibility matrix & torch-free guarantee:** Verified both synthetic traces (`STORY`/`STANDARD`/`DEEP` × 3 animation frames/step) and live `TraceRecorder` -> headless `App` playback across all 8 `compat_matrix` models (`tiny_ch07`, `small_bias`, `heads_8_of_64`, `head_dim_1`, `deep_narrow`, `lora_small`, `wrapped_ckpt`, and `@pytest.mark.slow` `gpt2_small_shape`); `tests/render/test_torch_free_suite.py` passed with `torch` blocked in `sys.meta_path`.
+- **Performance (§8.4 budgets at `1920×1080` headless):** Verified across all 15 active playlist `StepKind`s on `gpt2_small`-scale reduced snapshots (`T=24`, `emb_dim=64`); worst initial `enter()` + layout = **10.14 ms** (`ACTIVATION`, `< 100 ms` budget); worst 20-frame animation average = **1.02 ms/frame** (`QKV_PROJECTION`, `< 16.0 ms` budget).
+- **Static checks:** `ruff check src tests` clean, `ruff format --check src tests` clean (140 files formatted), `mypy --strict` on `core`/`narration`/`render` (54 files clean), `mypy` on `probe` (32 files clean), `tests/test_import_boundaries.py` clean, and `git status/diff ch07/` completely empty.
+- **Manual checks:** Headlessly rendered and visually inspected **40 PNG frames** covering all 16 scene types (`t=mid` and `t=end` on `traces/samples/tiny_demo.trace.npz` across `dark` and `light` themes at `1920×1080` and `800×600`), catching and fixing the 4 layout/readout bugs recorded under *Fixed*. Live desktop window & screenshare rehearsal remains deferred to Phase 7/8 manual verification.
+
+### Known Issues & Deferred Items
+- Interactive HUD widgets (`minimap`, `legend`, `buttons`, hover `tooltip`, `nerd_panel`, `help_overlay`), live hotkeys (`T`, `+`/`-`, `P`), and `tilevis demo` are scheduled for Phase 7 (`0.7.0`).
 
 ---
 

@@ -73,6 +73,10 @@ class TiktokenTokenizer:
         except UnicodeDecodeError:
             return "".join(f"<0x{b:02X}>" for b in raw_b)
 
+    def validate_token_ids(self, token_ids: Sequence[int], vocab_size: int) -> None:
+        """Validate that all token IDs fall within the model's vocabulary."""
+        validate_token_ids(token_ids, vocab_size)
+
 
 def validate_token_ids(token_ids: Sequence[int], vocab_size: int) -> None:
     """Validate that all token IDs fall within the model's vocabulary.

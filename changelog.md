@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 | `0.1.0` | Phase 1 | Project scaffolding and tooling | Completed (2026-11-08) |
 | `0.2.0` | Phase 2 | Core data contract and trace format | Completed (2026-11-08) |
 | `0.3.0` | Phase 3 | Model loading, config inference, text and adapters | Completed (2026-11-08) |
-| `0.4.0` | Phase 4 | Probe: hooks, builders, reduction, generation, recorder | Planned |
+| `0.4.0` | Phase 4 | Probe: hooks, builders, reduction, generation, recorder | Completed (2026-11-08) |
 | `0.5.0` | Phase 5 | Renderer foundation, navigation, tiles and generic scene | Planned |
 | `0.6.0` | Phase 6 | Dedicated scenes: matmul, attention, residual and prediction | Planned |
 | `0.7.0` | Phase 7 | Presentation UX, widgets, nerd mode and polish | Planned |
@@ -25,7 +25,56 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
-- *(Phase 4 probe hooks, builders, reduction, generation, recorder pending.)*
+- *(Phase 5 renderer foundation, navigation, tiles and generic scene pending.)*
+
+---
+
+## [0.4.0] - 2026-11-08 — Phase 4: Probe: Hooks, Builders, Reduction, Generation, Recorder
+
+**Requirements addressed:** R1, R2, R3, R4, R6, R7, R8, R11
+
+### Added
+- `src/tilevis/probe/hooks.py`: `HookManager` context manager registering forward pre/post hooks on requested submodule paths, tracking per-module call counters, restoring model training state, and guaranteeing handle cleanup in `finally` even on exceptions.
+- `src/tilevis/probe/capture.py`: `CaptureBuffer` storing unbatched, detached CPU `float32` tensors keyed by `(module_path, call_idx, role)` with batch dimension 0 removed.
+- `src/tilevis/probe/reduce.py`: Dimensionality reduction engine, `REDUCERS` registry (`none`, `stride`, `block_mean`, `max_abs`), `compute_stride_indices()` generating strictly increasing in-bounds coordinate maps, `IndexPlan` maintaining cross-step alignment across axis families (`model_dim`, `ff_dim`, `head_dim`, `token`, `head`), `compute_tensor_stats()` computed on full unreduced tensors, and `create_tensor_snapshot()` with non-finite value sanitization.
+- `src/tilevis/probe/builders/`: Modular step builders conforming to `StepBuilder` protocol and registered in `STEP_BUILDERS`:
+  - `embedding.py`: `PROMPT`, `TOKENIZE`, and `EMBEDDING` step builders assembling token and position vector snapshots and their sum.
+  - `layernorm.py`: `LAYERNORM` steps for transformer blocks and final normalization, with scale/shift weight extraction and mathematical fidelity grading.
+  - `attention.py`: Attention builder performing multi-head scaled dot-product attention recomputation under `torch.inference_mode()`, causal masking, automatic `n_heads` divisor inference from `emb_dim`, numerical fidelity grading (`exact`, `approximate`, `unverified`, `failed`), emitting `QKV_PROJECTION`, `ATTENTION_PATTERN` ($H \times T \times T$), `ATTENTION_MIX`, and `LINEAR` (`block.att.out`), with graceful `GENERIC` fallback on failure.
+  - `residual.py`: `RESIDUAL_ADD` steps with identity verification (`out ≈ shortcut + update`) for both attention and feedforward sublayers.
+  - `feedforward.py`: MLP sublayer step construction for `LINEAR` (expand), `ACTIVATION` (GELU), and `LINEAR` (contract).
+  - `block_summary.py`: `BLOCK_SUMMARY` step builder at `DetailLevel.STORY` computing `update = output - input`.
+  - `output.py`: `LOGITS` step builder focusing on the last token's vector meeting top-k candidate weight rows, and `NEXT_TOKEN` step builder with candidate ranking from ground-truth forward pass logits.
+  - `generic.py`: Dynamic fallback step builder mapping leaf modules for non-standard architectures under `GenericAdapter`.
+- `src/tilevis/probe/generation.py`: Autoregressive generation loop supporting greedy argmax, top-k sampling with temperature and seeded reproducibility, context window left-cropping (`idx[:, -context_size:]`), and EOS termination.
+- `src/tilevis/probe/recorder.py`: `TraceRecorder` orchestrating forward execution under hooks, executing step builders in deterministic template order, assembling `ModelSpecInfo`, `PassRecord`, and `Trace`, and strictly validating invariants with `validate_trace()`.
+- `src/tilevis/cli.py`: Wired `tilevis record` subcommand with CLI options `--profile`, `--prompt`, `--new-tokens`, `--strategy`, `--temperature`, `--top-k`, `--seed`, `--n-heads`, `--device`, `--max-features`, `--max-tokens`, and `-o/--output`.
+- `traces/samples/`: Committed compact reference sample traces:
+  - `tiny_demo.trace.npz`: `small_bias` architecture (3 layers, 4 heads, emb_dim=48), 3 passes, seed 123 (1.03 MB).
+  - `tiny_ch07.trace.npz`: `tiny_ch07` reference architecture (1 layer, 2 heads, emb_dim=12), 3 passes, seed 123 (144 KB).
+- Test suites:
+  - `tests/probe/test_hooks_and_capture.py`: Normal and exceptional lifecycle cleanup, module call counting, unbatched CPU storage.
+  - `tests/probe/test_reduce.py`: Stride invariants, IndexPlan token windowing, full tensor stats, and NaN/Inf sanitization.
+  - `tests/probe/test_builders.py`: Unit tests for all step builders with synthetic and live model tensors.
+  - `tests/probe/test_generation.py`: Generation equivalence to `previous_chapters.generate()`, context cropping, and EOS stopping.
+  - `tests/probe/test_recorder.py`: Non-interference verification, template order coverage, and NPZ round-tripping.
+  - `tests/probe/test_compat_recorder.py`: End-to-end recording across all 8 compatibility matrix variants, verifying logit bit-identity and fidelity.
+  - `tests/probe/test_weakness_recorder.py`: Single-token prompt warning, context cropping, attention failure fallback, NaN weight replacement, and determinism.
+  - `tests/integration/test_record_cli.py`: Full CLI record invocation and validation of committed sample traces.
+
+### Performance Verification (§8.4 Budgets)
+| Metric | Measured | Target Budget | Result |
+|---|---|---|---|
+| Record `small_bias` (3 passes) | **0.028 s** | < 5.0 s | Passed (178x under budget) |
+| Record `gpt2_small_shape` (3 passes, 8 tokens) | **1.972 s** | < 60.0 s | Passed (30x under budget) |
+| `gpt2_small_shape` Trace file size | **6.25 MB** | < 50.0 MB | Passed (8x under budget) |
+| `gpt2_small_shape` Load & validate time | **0.228 s** | < 2.0 s | Passed (8.7x under budget) |
+
+### Verification & Test Summary
+- **Automated tests:** 143 passed in 9.08s (all unit, regression, compatibility, and weakness tests), 145 passed including `slow` tests in 11.5s.
+- **Non-interference guarantee:** Verified `torch.equal()` bit-identical logits on CPU with and without recorder, unchanged model `training` and `requires_grad` flags, and empty hook lists across all modules.
+- **Fidelity verification:** Verified attention scores and residual additions achieve exact numerical fidelity ($< 10^{-4}$ error).
+- **Static checks:** `ruff format --check` (clean across 124 files), `ruff check` (clean), `mypy` (no issues in 89 source files), and import boundary tests clean.
 
 ---
 

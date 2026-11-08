@@ -34,12 +34,12 @@ def test_cli_no_args_prints_help(capsys: pytest.CaptureFixture[str]) -> None:
     assert "usage:" in captured.out
 
 
-def test_cli_record_stub(capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_record_error_on_missing_profile(capsys: pytest.CaptureFixture[str]) -> None:
     code = main(
         [
             "record",
             "--profile",
-            "profiles/tiny_random.toml",
+            "nonexistent_profile.toml",
             "--prompt",
             "Hello",
             "-o",
@@ -48,7 +48,7 @@ def test_cli_record_stub(capsys: pytest.CaptureFixture[str]) -> None:
     )
     assert code == 1
     captured = capsys.readouterr()
-    assert "Subcommand 'record' is not implemented yet" in captured.out
+    assert "not found" in captured.err.lower()
 
 
 def test_cli_play_stub(capsys: pytest.CaptureFixture[str]) -> None:

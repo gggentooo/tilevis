@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
+from typing import Any
 
 import tilevis
 from tilevis.logging_setup import setup_logging
@@ -16,9 +17,54 @@ from tilevis.logging_setup import setup_logging
 
 def _record_command(args: argparse.Namespace) -> int:
     """Handle `tilevis record` subcommand."""
-    # Lazy import of probe module when implemented in Phase 4
-    sys.stdout.write("Subcommand 'record' is not implemented yet (scheduled for Phase 4).\n")
-    return 1
+    from pathlib import Path
+
+    from tilevis.core.config import RecordSettings
+    from tilevis.core.errors import TilevisError
+    from tilevis.core.serialization import save_trace
+    from tilevis.probe.loading.factory import build_model
+    from tilevis.probe.loading.profile import load_profile
+    from tilevis.probe.recorder import TraceRecorder
+
+    try:
+        profile = load_profile(args.profile)
+        overrides: dict[str, Any] = {}
+        if getattr(args, "n_heads", None) is not None:
+            overrides["n_heads"] = args.n_heads
+        if getattr(args, "seed", None) is not None:
+            overrides["seed"] = args.seed
+
+        device_req = getattr(args, "device", "auto")
+        built_model = build_model(profile, overrides=overrides, device=device_req)
+
+        settings = RecordSettings(
+            new_tokens=args.new_tokens,
+            strategy=args.strategy,
+            temperature=args.temperature,
+            top_k=args.top_k,
+            seed=args.seed,
+            max_features=args.max_features,
+            max_tokens=args.max_tokens,
+            device=device_req,
+        )
+
+        recorder = TraceRecorder(built_model, settings)
+        trace = recorder.record(args.prompt)
+
+        out_path = Path(args.output).resolve()
+        save_trace(trace, out_path)
+
+        total_steps = sum(len(p.steps) for p in trace.passes)
+        sys.stdout.write(
+            f"Successfully recorded {len(trace.passes)} pass(es) "
+            f"({total_steps} steps) to {out_path.name}\n"
+        )
+        return 0
+    except TilevisError as exc:
+        if getattr(args, "verbose", False):
+            raise
+        sys.stderr.write(f"Error: {exc}\n")
+        return 1
 
 
 def _play_command(args: argparse.Namespace) -> int:

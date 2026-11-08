@@ -34,6 +34,19 @@ from tilevis.core.validation import validate_trace
 MIGRATIONS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {}
 
 
+def _json_default(obj: Any) -> Any:
+    """JSON serializer fallback converting numpy scalar types to native Python types."""
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating,)):
+        return float(obj)
+    if isinstance(obj, (np.bool_,)):
+        return bool(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+
+
 def save_trace(trace: Trace, path: Path | str) -> None:
     """Serialize a Trace object to a compressed *.trace.npz file atomically.
 
@@ -146,7 +159,9 @@ def save_trace(trace: Trace, path: Path | str) -> None:
         "passes": [_serialize_pass(p) for p in trace.passes],
     }
 
-    manifest_bytes = json.dumps(manifest, ensure_ascii=False, indent=None).encode("utf-8")
+    manifest_bytes = json.dumps(
+        manifest, ensure_ascii=False, indent=None, default=_json_default
+    ).encode("utf-8")
     manifest_arr = np.frombuffer(manifest_bytes, dtype=np.uint8)
 
     save_dict: dict[str, np.ndarray] = {

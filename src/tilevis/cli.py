@@ -30,9 +30,12 @@ def _play_command(args: argparse.Namespace) -> int:
 
 def _inspect_command(args: argparse.Namespace) -> int:
     """Handle `tilevis inspect` subcommand."""
-    # Lazy import of probe inspection when implemented in Phase 3
-    sys.stdout.write("Subcommand 'inspect' is not implemented yet (scheduled for Phase 3).\n")
-    return 1
+    from tilevis.probe.inspect import inspect_model
+
+    return inspect_model(
+        profile_path=getattr(args, "profile", None),
+        checkpoint_path=getattr(args, "checkpoint", None),
+    )
 
 
 def _check_command(args: argparse.Namespace) -> int:

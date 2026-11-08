@@ -58,11 +58,11 @@ def test_cli_play_stub(capsys: pytest.CaptureFixture[str]) -> None:
     assert "Subcommand 'play' is not implemented yet" in captured.out
 
 
-def test_cli_inspect_stub(capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_inspect_implemented(capsys: pytest.CaptureFixture[str]) -> None:
     code = main(["inspect", "--profile", "profiles/tiny_random.toml"])
-    assert code == 1
+    assert code == 0
     captured = capsys.readouterr()
-    assert "Subcommand 'inspect' is not implemented yet" in captured.out
+    assert "Tilevis Model Inspection" in captured.out
 
 
 def test_cli_check_stub(capsys: pytest.CaptureFixture[str]) -> None:

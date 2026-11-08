@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 | `0.0.0` | Phase 0 | Architecture, Requirements & Specification | Completed (2026-11-08) |
 | `0.1.0` | Phase 1 | Project scaffolding and tooling | Completed (2026-11-08) |
 | `0.2.0` | Phase 2 | Core data contract and trace format | Completed (2026-11-08) |
-| `0.3.0` | Phase 3 | Model loading, config inference, text and adapters | Planned |
+| `0.3.0` | Phase 3 | Model loading, config inference, text and adapters | Completed (2026-11-08) |
 | `0.4.0` | Phase 4 | Probe: hooks, builders, reduction, generation, recorder | Planned |
 | `0.5.0` | Phase 5 | Renderer foundation, navigation, tiles and generic scene | Planned |
 | `0.6.0` | Phase 6 | Dedicated scenes: matmul, attention, residual and prediction | Planned |
@@ -25,7 +25,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
-- *(Phase 3 model loading, config inference, text and adapters pending.)*
+- *(Phase 4 probe hooks, builders, reduction, generation, recorder pending.)*
+
+---
+
+## [0.3.0] - 2026-11-08 — Phase 3: Model Loading, Config Inference, Text and Adapters
+
+**Requirements addressed:** R6, R8, R11
+
+### Added
+- `src/tilevis/probe/loading/code_import.py`: Dynamic user code importing (`import_model_module`) via unique module names (`tilevis_user_<sha1>`) with isolated `sys.path` modification in try-finally and internal caching.
+- `src/tilevis/probe/loading/profile.py`: `ModelProfile` dataclass and TOML profile loader (`load_profile`) resolving relative file paths relative to the profile location.
+- `src/tilevis/probe/loading/checkpoint.py`: Safe checkpoint loader (`load_checkpoint`) supporting state dict container unwrapping (`model_state_dict`, `state_dict`, `model`, `nn.Module`), prefix stripping (`module.`, `_orig_mod.`), and secure pickle detection.
+- `src/tilevis/probe/loading/config_infer.py`: Model architecture shape inference (`infer_config_from_state_dict`) for `vocab_size`, `emb_dim`, `context_length`, `n_layers`, `qkv_bias`, and provisional `n_heads`, with strict contradiction checking reporting both expected and actual values.
+- `src/tilevis/probe/loading/lora.py`: Detection of unmerged LoRA parameters (`detect_lora_tensors`) and exact dense weight folding (`merge_lora_state_dict`, $W_{\text{eff}} = W + \alpha (A B)^T$) with alpha fallback warnings.
+- `src/tilevis/probe/loading/factory.py`: `build_model()` assembling ready `nn.Module` instances across custom factory callables, class + checkpoint, and class with seeded random initialization, with non-persistent `.mask` buffer tolerance.
+- `src/tilevis/probe/text/tokenizer.py`: `Tokenizer` protocol and `TiktokenTokenizer` GPT-2 BPE implementation with leading space (`·`), newline (`↵`), and undecodable byte (`<0xAB>`) display formatting, plus vocabulary range validation (`validate_token_ids`).
+- `src/tilevis/probe/text/templates.py`: `TEMPLATES` registry supporting `raw` identity and `alpaca` instruction tuning formats matching `gpt_instruction_finetuning.py`.
+- `src/tilevis/probe/adapters/`: Architecture adapter contract (`ModelSpec`, `BlockSpec`, `ArchitectureAdapter`), `ADAPTERS` registry, `gpt_scratch` adapter with automatic block submodule resolution, `generic` fallback adapter, and `select_adapter` auto-detection.
+- `src/tilevis/probe/weights.py`: `WEIGHT_EXTRACTORS` registry extracting weights from `nn.Linear`, `LinearWithLoRA`, `nn.Embedding`, and `LayerNorm`, normalized to the presentation orientation $(D_{\text{in}} \times D_{\text{out}})$.
+- `src/tilevis/probe/inspect.py`: Probe inspection utility and CLI subcommand `tilevis inspect` supporting both `--profile` and `--checkpoint` flags.
+- `tests/fixtures/tiny_models.py`: Model builder and checkpoint fixture generator for all 8 `compat_matrix` variants in plain, LoRA-wrapped, and DataParallel-wrapped styles.
+- Unit and compatibility test suites under `tests/probe/`: `test_code_import.py`, `test_checkpoint.py`, `test_config_infer.py`, `test_lora.py`, `test_text.py`, `test_adapters.py`, `test_weights.py`, `test_inspect_cli.py`, `test_compat_probe.py`.
+
+### Verified Checkpoint Styles
+- **Plain state dict:** `tiny_ch07`, `small_bias`, `heads_8_of_64`, `head_dim_1`, `deep_narrow`, `gpt2_small_shape`.
+- **LoRA-wrapped state dict:** `lora_small` with rank=4, alpha=8.0 (verified output matches unmerged model within $10^{-5}$).
+- **Container / DataParallel wrapped:** `wrapped_ckpt` containing `model_state_dict` and `module.` prefixes.
+- **Pickled `nn.Module`:** Verified rejection with guidance when `allow_pickle=False`, and successful unwrapping when `allow_pickle=True`.
+- **Custom model variants:** Subclasses with `pos_emb=None` (adapter sets `position_embedding=None`).
+
+### Verification & Test Summary
+- **Automated tests:** 108 passed in 6.16s, 90% overall test coverage.
+- **Compatibility matrix:** All 8 configurations verified for exact parameter inference, model construction, bit-for-bit CPU logit equivalence (within $10^{-5}$ for LoRA), and adapter confidence $\ge 0.90$.
+- **Weakness probes:**
+  - Contradictory profile parameters (`n_layers`, `emb_dim`, `vocab_size`) raise `ConfigInferenceError` displaying both values.
+  - LoRA checkpoints without explicit `[model.lora.alpha]` log a warning and fall back to 16.0.
+  - Vocabulary overflow raises clear `ModelLoadError`.
+  - Non-ASCII and Korean paths verified for checkpoint loading.
+  - Unpickling full module code rejected safely when `allow_pickle=False`.
+  - Name clashes between identical filenames in different directories prevented via unique hashing.
+  - `sys.path` restored reliably even on module import failure.
+- **Static checks:** `ruff format --check` (clean), `ruff check` (clean), `mypy --strict` on `core`, `narration`, `render` (clean), `mypy` on `probe` (clean), and import boundary tests clean.
+- **Manual check:** Executed `tilevis inspect --checkpoint` on a generated `small_bias.pth` model and `tilevis inspect --profile profiles/tiny_random.toml`, verifying clear formatted output.
 
 ---
 

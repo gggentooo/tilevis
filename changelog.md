@@ -20,6 +20,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 | `0.7.0` | Phase 7 | Presentation UX, widgets, nerd mode and polish | Completed (2026-11-08) |
 | `1.0.0` | Phase 8 | Windows lecture-hall readiness, preflight, packaging and docs | Completed (2026-11-08) |
 | `1.1.0` | Phase 9 | Crisp High-DPI rendering, auto-resolution & 1080p viewport | Completed (2026-11-11) |
+| `1.2.0` | Phase 10 | Interactive trace launcher GUI and portable USB executables | Completed (2026-11-11) |
+
+---
+
+## [1.2.0] - 2026-11-11 — Phase 10: Interactive trace launcher GUI and portable USB executables
+
+**Requirements addressed:** R1, R2, R5, R8, R9, R10, R11
+
+### Added
+- `src/tilevis/render/launcher.py`:
+  - `TraceEntry` dataclass encapsulating path, filename, category (`User Trace` vs `Sample`), and file size in KB.
+  - `discover_traces(traces_dir=None) -> list[TraceEntry]`: dynamically scans traces with priority ordering (explicit directory > frozen executable-adjacent `traces/` > project root `traces/` > `_MEIPASS` / package dir). Partitions entries into User Traces and Sample Traces, sorting user traces first, followed by samples, alphabetically.
+  - `TraceMetadata` dataclass and fast `read_trace_metadata(path)` reader: extracts `__manifest__.npy` without unpacking heavy tensor arrays (< 20 ms), reading model name, layer count, embedding dimension, attention heads, parameter count, pass count, total steps, and prompt preview.
+  - `LauncherApp`: full-featured `pygame-ce` GUI with scrollable trace dropdown (supporting mouse wheel, up/down arrows, and auto-scrolling to keep active item in view), metadata preview card, and interactive pills to toggle Window Mode (`borderless` / `windowed`), Theme (`dark` / `light`), Detail Level (`Story` / `Standard` / `Deep`), and Language (`EN` / `KO` / `JA`) before launching.
+  - Trilingual UI localization (`_tr()`) in English, Korean, and Japanese using bundled Noto Sans fonts.
+- `src/tilevis/cli.py`:
+  - Added `launch` subcommand (`tilevis launch [--traces-dir PATH] [--profile NAME] [--headless]`).
+  - Configured zero-argument invocation (`args.subcommand is None`) to automatically route to `_launch_command(args)`, opening the launcher GUI by default.
+- Packaging & Standalone Executables:
+  - `packaging/tilevis_player.spec`: upgraded PyInstaller spec supporting both Windows (`tilevis_player.exe`) and macOS (`BUNDLE` `tilevis_player.app` + Unix CLI binary). Configured with `hiddenimports` including `tilevis.render.launcher`.
+  - `scripts/build_usb_dist.py`: automated script that builds the native binary using PyInstaller, sets isolated `PYINSTALLER_CONFIG_DIR`, and stages a ready-to-copy USB thumb-drive directory (`dist/usb_drive/tilevis_player/`) with the standalone binary/bundle, external editable `traces/` folder, presenter settings, and `README.txt`.
+  - `scripts/build_macos.sh` & `scripts/build_windows.bat`: one-click native platform build scripts.
+  - `.github/workflows/build_executables.yml`: multi-platform GitHub Actions CI workflow building native Windows and macOS standalone executables and uploading downloadable release artifacts.
+- Tests:
+  - `tests/render/test_launcher.py`: 11 unit tests and weakness probes covering trace discovery and priority sorting, fast metadata extraction, corrupt file safety, option toggles, keyboard navigation, mouse hit-testing, CLI routing, empty directory handling, and dropdown scrolling overflow.
+
+### Changed
+- `pyproject.toml` and `src/tilevis/__init__.py`: version bumped to `1.2.0`.
+- `tests/test_cli.py`: updated `test_cli_help` to check for `launch` subcommand and updated zero-argument CLI test to verify routing to the launcher GUI.
+- `packaging/README.md`, `README.md`, and `technical_document.md`: expanded documentation to cover the new Launcher GUI, portable USB thumb-drive layout, and cross-platform build instructions.
+
+### Verification Summary
+- **Tests passing:** 408 tests total (397 existing regression tests + 11 new launcher tests).
+- **Test coverage:** 90% overall (core 88–91%, narration 90%, render 89%).
+- **Boundary enforcement:** `tests/test_import_boundaries.py` and `tests/render/test_torch_free_suite.py` verified 100% compliant; zero PyTorch imports in render/launcher.
+- **Static checks:** `ruff check` and `ruff format --check` passed across all 150 files; `mypy --strict` passed on `core`, `narration`, and `render`.
+- **Immutability:** `git diff ch07/` verified completely empty.
+- **Executable verified:** `dist/usb_drive/tilevis_player/` built and validated on macOS; standalone binary ran `check` and `launch --headless` with return code 0.
 
 ---
 

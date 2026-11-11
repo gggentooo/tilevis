@@ -108,6 +108,47 @@ def _play_command(args: argparse.Namespace) -> int:
         return 1
 
 
+def _launch_command(args: argparse.Namespace) -> int:
+    """Handle `tilevis launch` subcommand or zero-argument default."""
+    from pathlib import Path
+
+    from tilevis.core.config import PresenterSettings
+    from tilevis.core.errors import TilevisError
+    from tilevis.render.launcher import LauncherApp
+
+    try:
+        presenter_arg = getattr(args, "presenter", None)
+        if presenter_arg is not None:
+            settings = PresenterSettings.from_toml(presenter_arg)
+        else:
+            default_toml = Path("presenter/default.toml")
+            settings = (
+                PresenterSettings.from_toml(default_toml)
+                if default_toml.is_file()
+                else PresenterSettings()
+            )
+
+        if getattr(args, "window", None) is not None:
+            settings.window_mode = str(args.window)
+        if getattr(args, "theme", None) is not None:
+            settings.theme = str(args.theme)
+        if getattr(args, "detail", None) is not None:
+            settings.detail_level = int(args.detail)
+            if settings.detail_level == 1:
+                settings.later_pass_level = 1
+
+        traces_dir_arg = getattr(args, "traces_dir", None)
+        traces_dir = Path(traces_dir_arg).resolve() if traces_dir_arg else None
+        headless = bool(getattr(args, "headless", False))
+        launcher = LauncherApp(settings=settings, traces_dir=traces_dir, headless=headless)
+        return launcher.run()
+    except TilevisError as exc:
+        if getattr(args, "verbose", False):
+            raise
+        sys.stderr.write(f"Error: {exc}\n")
+        return 1
+
+
 def _inspect_command(args: argparse.Namespace) -> int:
     """Handle `tilevis inspect` subcommand."""
     from tilevis.probe.inspect import inspect_model
@@ -318,6 +359,47 @@ def build_parser() -> argparse.ArgumentParser:
     )
     play_parser.set_defaults(func=_play_command)
 
+    # Subcommand: launch
+    launch_parser = subparsers.add_parser(
+        "launch",
+        help="Open interactive GUI launcher to select and launch trace files",
+    )
+    launch_parser.add_argument(
+        "--traces-dir",
+        default=None,
+        help="Optional directory containing .trace.npz files to browse",
+    )
+    launch_parser.add_argument(
+        "--presenter",
+        default=None,
+        help="Path to presenter settings TOML file (defaults to presenter/default.toml if present)",
+    )
+    launch_parser.add_argument(
+        "--window",
+        choices=["borderless", "windowed", "exclusive"],
+        default=None,
+        help="Window display mode",
+    )
+    launch_parser.add_argument(
+        "--theme",
+        choices=["dark", "light"],
+        default=None,
+        help="Visual theme override",
+    )
+    launch_parser.add_argument(
+        "--detail",
+        type=int,
+        choices=[1, 2, 3],
+        default=None,
+        help="Detail level: 1 (Story), 2 (Standard), 3 (Deep)",
+    )
+    launch_parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Initialize and render one headless frame without opening a visible window",
+    )
+    launch_parser.set_defaults(func=_launch_command)
+
     # Subcommand: inspect
     inspect_parser = subparsers.add_parser(
         "inspect",
@@ -387,6 +469,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     setup_logging(verbose=getattr(args, "verbose", False))
 
     if not hasattr(args, "func"):
+        if args.subcommand is None:
+            # Default to GUI launcher when run with no arguments
+            return _launch_command(args)
         parser.print_help()
         return 0
 

@@ -101,11 +101,11 @@ Companion documents:
 | `ruff` | Linting and formatting (replaces flake8, isort and black) |
 | `mypy` | Static typing (strict for `core`, `narration`, `render`) |
 
-### 3.4 Build extra (`pip install -e ".[build]"`, Phase 8 only)
+### 3.4 Build extra (`pip install -e ".[build]"`, Phase 8 & Phase 10)
 
 | Library | Purpose |
 |---|---|
-| `pyinstaller>=6` | Optional single-folder Windows build of the **player** (no Python needed on the lecture PC). It must be built **on Windows** because PyInstaller does not cross-compile. |
+| `pyinstaller>=6` | Standalone single-folder / app-bundle Windows (`.exe`) and macOS (`.app` / binary) builds of the **player** for USB thumb-drive deployment (no Python needed on the lecture PC). Each target OS executable must be built on its native OS (locally or via GitHub Actions CI) because PyInstaller does not cross-compile. |
 
 ### 3.5 Explicitly rejected (do not introduce)
 
@@ -113,7 +113,7 @@ Companion documents:
 |---|---|
 | `matplotlib` inside `tilevis` | Too slow for interactive animation. The colormaps are implemented as numpy LUTs. |
 | `pydantic`, `attrs` | Stdlib `dataclasses` are enough, and they keep dependencies minimal. |
-| `click`, `typer` | Stdlib `argparse` is enough for 5 subcommands. |
+| `click`, `typer` | Stdlib `argparse` is enough for 6 subcommands. |
 | `PyYAML` | TOML (`tomllib`, stdlib) is used for all config files. |
 | Threads, multiprocessing | Not needed. Record and play are separate phases, and pygame must own the main thread. |
 | `tensorflow` | Only needed by `gpt_download.py`. That path is out of scope (see §12). |
@@ -211,6 +211,7 @@ llm_tile_visualizer/
 │   │       └── en.toml          # caption texts keyed by Semantic/StepKind
 │   ├── render/                  # MODULE B: pygame + numpy, never imports torch
 │   │   ├── app.py               # App: owns window, main loop, tick(dt, events)
+│   │   ├── launcher.py          # LauncherApp: GUI trace dropdown selector & metadata preview
 │   │   ├── platform.py          # Windows DPI awareness, display queries
 │   │   ├── window.py            # windowed / borderless-fullscreen / exclusive modes
 │   │   ├── commands.py          # Command enum (NEXT, PREV, NEXT_STAGE, …)
@@ -874,13 +875,15 @@ tilevis record  --profile PROFILE.toml --prompt TEXT [--new-tokens 3] [--strateg
                 [--max-features 64] [--max-tokens 24] -o OUT.trace.npz
 tilevis play    TRACE.trace.npz [--presenter presenter/default.toml] [--window borderless|windowed|exclusive]
                 [--theme dark|light] [--detail 1|2|3]
+tilevis launch  [--traces-dir DIR] [--presenter presenter/default.toml] [--window borderless|windowed|exclusive]
+                [--theme dark|light] [--detail 1|2|3]           # GUI trace selector (also default when run with no args)
 tilevis inspect --profile PROFILE.toml | --checkpoint X.pth     # prints inferred config, adapter, fidelity on a test prompt
 tilevis check   [TRACE ...]                                     # preflight: pygame, fonts, display size, traces load & validate
 tilevis demo    [--prompt TEXT]                                 # tiny random model → record in memory → play (needs [record])
 ```
 
 - Exit codes: `0` success, `1` user error (with a friendly message, no traceback unless `--verbose`), `2` internal error.
-- `play` and `check` must work **without torch installed**.
+- `play`, `launch`, and `check` must work **without torch installed**.
 
 ### 6.5 Presenter settings file (`presenter/default.toml`)
 
@@ -999,7 +1002,7 @@ Every phase's **Test step** has six parts:
 Phase N produces version `0.N.0`. Phase 8 produces `1.0.0`. Post-`1.0.0` enhancement phases increment minor versions (`1.1.0`, …). Do phases **in order**.
 
 ```
-P1 Scaffolding ─► P2 Core contract ─► P3 Model loading ─► P4 Probe/recorder ─► P5 Renderer base ─► P6 Scenes ─► P7 Presentation UX ─► P8 Windows deploy ─► P9 Crisp HiDPI & auto-resolution
+P1 Scaffolding ─► P2 Core contract ─► P3 Model loading ─► P4 Probe/recorder ─► P5 Renderer base ─► P6 Scenes ─► P7 Presentation UX ─► P8 Windows deploy ─► P9 Crisp HiDPI & auto-resolution ─► P10 GUI Launcher & USB Executables
 ```
 
 Each phase lists: **Goal**, **Tasks**, **Deliverables**, **Test step** (six parts, §8.5) and **Exit criteria**.
@@ -1410,9 +1413,66 @@ Each phase lists: **Goal**, **Tasks**, **Deliverables**, **Test step** (six part
    - **Simulated 2× Retina / 150% Windows HiDPI click accuracy:** simulate a window where `logical_size = (1280, 720)` and `drawable_size = (1920, 1080)` (`dpi_scale = (1.5, 1.5)`) or `(1512, 982)` → `(3024, 1964)` (`dpi_scale = (2.0, 2.0)`); verify synthetic `MOUSEBUTTONDOWN` events in logical coordinates hit the exact on-screen footer buttons and minimap segments drawn in physical coordinates.
    - **Live resize & `F11` mode switch crispness:** resize `App` from `1280×720` → `1920×1080` → `3024×1964` mid-step and verify `scene._ctx.scale`, `TileGrid.cell_px`, and font sizes update immediately without stale low-res surfaces.
 5. *Static:* `ruff check src tests`, `ruff format --check src tests`, `mypy --strict` on `core`/`narration`/`render`, `mypy` on `probe`/`check.py`, and `test_import_boundaries.py` pass with zero errors.
-6. *Manual:* launch `tilevis play traces/samples/big_en.trace.npz` and `traces/samples/big_ja.trace.npz` in both `borderless` and `windowed` modes; verify razor-sharp text and tile edges at 1080p and on HiDPI/Retina displays, and record results in `changelog.md`.
+6. *Manual:* launch `tilevis play traces/samples/big_en.trace.npz` and `traces/big_ja.trace.npz` in both `borderless` and `windowed` modes; verify razor-sharp text and tile edges at 1080p and on HiDPI/Retina displays, and record results in `changelog.md`.
 
 **Exit criteria:** all six test parts pass; `ch07/` untouched; `changelog.md` updated for `1.1.0`.
+
+---
+
+### Phase 10: Interactive trace launcher GUI and portable USB executables (`1.2.0`)
+
+**Goal:** provide a native `pygame-ce` GUI launcher (`src/tilevis/render/launcher.py`) with an interactive dropdown selector for `.trace.npz` files in `traces/`, make it the default entry point when launched with no arguments, and produce portable standalone Windows (`.exe`) and macOS (`.app` / binary) distributions for USB thumb-drive lecture-hall playback (R5, R9, R10, R11).
+
+**Tasks**
+1. `render/launcher.py` — Trace discovery & High-DPI `pygame-ce` GUI Launcher with Dropdown:
+   - Implement `TraceEntry` dataclass (`path: Path`, `display_name: str`, `category: str`, `size_kb: float`) and `discover_traces(traces_dir: Path | None = None) -> list[TraceEntry]`.
+   - Search candidate directories in priority order so both dev checkouts and USB thumb-drive executables discover user traces automatically:
+     1. Explicit `traces_dir` argument (when provided),
+     2. Portable USB executable-adjacent `traces/` directory (`Path(sys.executable).resolve().parent / "traces"` and its subdirectories when `getattr(sys, "frozen", False)` is `True`),
+     3. Current working directory `./traces/` (including `./traces/samples/`),
+     4. Package-relative or PyInstaller `_MEIPASS` bundled `traces/` directory.
+   - Deduplicate by resolved path and sort root `traces/*.trace.npz` before `traces/samples/*.trace.npz`.
+   - Implement `LauncherApp` in `src/tilevis/render/launcher.py` using `pygame-ce` (`WindowManager`, `UiScale`, `FontManager`, `Theme`, and High-DPI `map_point`—introducing zero external GUI dependencies and avoiding macOS Cocoa `tkinter` + SDL2 event-loop conflicts):
+     - **Interactive Dropdown widget:** displays the active `.trace.npz` item; clicking the dropdown header (or pressing `Up` / `Down` arrows) opens/navigates a scrollable dropdown menu of all discovered traces with mouse-hover highlighting, mouse-wheel scrolling, and click selection.
+     - **Trace metadata preview card:** lazily loads manifest/summary info for the selected trace (`ModelSpecInfo`: model name, `n_layers`, `emb_dim`, `n_heads`, parameter count, pass/step counts, prompt text preview, and file size) or displays a friendly error badge if a file is corrupted.
+     - **Quick presenter setting pills:** clickable toggles for Window Mode (`Borderless` / `Windowed`), Theme (`Dark` / `Light`), Detail Level (`Story` / `Standard` / `Deep`), and Language (`EN` / `KO` / `JA`).
+     - **Action buttons:** primary `"Launch Presentation ▶"` button (`Enter` / `Space`) that hands off the selected trace and `PresenterSettings` into `App(trace, settings)` for playback, plus a `"Refresh ↻"` button (`R`) to re-scan `traces/` on the fly when new files are copied to the thumb drive.
+2. `cli.py` & `__main__.py` — `tilevis launch` subcommand & zero-argument GUI default:
+   - Add `tilevis launch [--traces-dir DIR] [--presenter PATH] [--window borderless|windowed|exclusive] [--theme dark|light] [--detail 1|2|3] [--headless]` subcommand to `cli.py`.
+   - Update `cli.main()` so running `tilevis` (or double-clicking the standalone executable on a USB thumb drive) with **no subcommand** opens `LauncherApp` by default instead of printing `--help` and exiting (`-h` / `--help` continues to print CLI usage).
+3. `packaging/tilevis_player.spec`, USB build scripts & CI workflow — Windows `.exe` and macOS application binaries:
+   - Upgrade `packaging/tilevis_player.spec` to support both **Windows** (`tilevis_player.exe`) and **macOS** (`tilevis_player` Unix binary + `tilevis_player.app` bundle via `BUNDLE(...)` with `NSHighResolutionCapable=True` in `Info.plist`):
+     - Bundle `traces/*.trace.npz`, `traces/samples/*.trace.npz`, `presenter/default.toml`, `tilevis/assets/fonts/*`, and `tilevis/narration/locales/*.toml`.
+     - Include `tilevis.render.launcher` in `hiddenimports` while keeping `torch`, `tiktoken`, `matplotlib`, and dev tools in `excludes`.
+   - Create `scripts/build_usb_dist.py` (with convenience wrappers `scripts/build_macos.sh` and `scripts/build_windows.bat`) that runs PyInstaller for the current OS and stages a portable USB thumb-drive directory (`dist/usb_drive/tilevis_player/`) containing:
+     - The standalone executable (`tilevis_player.exe` on Windows; `tilevis_player` binary and `tilevis_player.app` on macOS),
+     - An external, user-writable `traces/` folder alongside the executable pre-populated with all `.trace.npz` files from `traces/` and `traces/samples/` so presenters can add or swap trace files directly on the thumb drive without rebuilding,
+     - An external `presenter/default.toml`.
+   - Add `.github/workflows/build_executables.yml` (`workflow_dispatch` + version tag trigger) that runs `scripts/build_usb_dist.py` natively on both `windows-latest` and `macos-latest` runners and publishes portable `tilevis-windows-usb.zip` (`.exe`) and `tilevis-macos-usb.zip` (`.app` + binary) artifacts (since PyInstaller does not cross-compile Windows `.exe` on macOS).
+4. Documentation (`packaging/README.md`, `README.md`, `technical_document.md`):
+   - Document the GUI launcher, portable USB thumb-drive directory layout, local macOS and Windows build commands, and CI artifact workflow.
+
+**Deliverables:** `1.2.0` release with `src/tilevis/render/launcher.py`, `tilevis launch` (and zero-arg GUI default), cross-platform `packaging/tilevis_player.spec`, `scripts/build_usb_dist.py` (`build_macos.sh` / `build_windows.bat`), `.github/workflows/build_executables.yml`, locally built macOS portable executable bundle in `dist/`, and updated `changelog.md`.
+
+**Test step**
+1. *Unit:*
+   - `discover_traces()`: verify discovery across `traces/` and `traces/samples/`, priority sorting (root traces before sample traces), path deduplication, and simulated frozen-executable (`sys.frozen = True`, `sys.executable`) external `traces/` lookup.
+   - `LauncherApp`: verify headless initialization, dropdown open/close toggle on click, item selection via synthetic mouse clicks (including `2.0×` High-DPI coordinate scaling) and `K_DOWN` / `K_UP` keyboard navigation, metadata preview loading, presenter option pill toggles (window mode, theme, detail level, language), `"Refresh"` re-scanning, and `"Launch Presentation"` handoff.
+   - `cli.py`: verify `tilevis launch --headless` and zero-argument `tilevis` invocation route cleanly to the launcher.
+2. *Regression:* full test suite across Phases 1–10 (`pytest -m "not manual"`) passes with coverage `≥ 85%` overall (`≥ 90%` on `core` and `narration`).
+3. *Compatibility:*
+   - Verify `LauncherApp` discovers, previews, and launches all 6 committed traces (`big_en`, `big_es`, `big_ja`, `big_ko`, `tiny_ch07`, `tiny_demo`) headlessly at `(1920, 1080)` and `(3024, 1964)` across `en`, `ko`, and `ja` locales.
+   - Verify `git diff ch07/` and `git status ch07/` remain empty (R6).
+4. *Weakness probes:*
+   - **Empty or missing `traces/` directory:** pointing `LauncherApp` at an empty `tmp_path` directory renders a clear empty-state message and keeps `"Refresh ↻"` and `Esc` functional without crashing.
+   - **Corrupt `.trace.npz` file in `traces/`:** placing a malformed `.trace.npz` file in `traces/` alongside valid traces does not crash `discover_traces()` or `LauncherApp`; selecting the corrupt entry shows an error notice in the preview card and prevents an unhandled crash on launch.
+   - **Scrollable dropdown overflow:** populate a temporary `traces/` directory with 25 `.trace.npz` files and verify mouse-wheel scrolling and keyboard navigation keep the selected item visible and clickable within viewport bounds.
+5. *Static:* `ruff check src tests`, `ruff format --check src tests`, `mypy --strict` on `core`/`narration`/`render`, `mypy` on `probe`/`check.py`, and `test_import_boundaries.py` pass with zero errors.
+6. *Manual:*
+   - Run `tilevis` with no arguments to open the GUI launcher, select traces from the dropdown, toggle settings, and launch into the visualizer.
+   - Build the native macOS USB bundle (`python scripts/build_usb_dist.py`) and run the generated executable directly from `dist/usb_drive/tilevis_player/`; record build details and verification in `changelog.md`.
+
+**Exit criteria:** all six test parts pass; `ch07/` untouched; `changelog.md` updated for `1.2.0`.
 
 ---
 

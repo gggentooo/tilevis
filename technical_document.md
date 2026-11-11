@@ -259,11 +259,26 @@ A 24-layer model with 14 internal sub-steps per block produces >340 steps per ge
 - **Colorblind-safe palettes:** default signed colormap is `diverging_blue_orange` (blue = negative, neutral = zero, orange = positive); probabilities and attention weights use `sequential_purple`. Both `dark` and `light` themes enforce text contrast $\ge 4.5:1$.
 - **Windows screenshare engineering:** `render/platform.py` enables Windows Per-Monitor High-DPI awareness before SDL initialization so text and tiles stay razor-sharp at 125%/150% display scaling, and `window.mode` defaults to `borderless` (`NOFRAME` at desktop size) to avoid exclusive-fullscreen black screens and `Alt+Tab` glitches in screenshare software.
 
+### 6.3 Interactive Launcher GUI (`render/launcher.py`)
+
+When `tilevis` is invoked with no arguments (or via `tilevis launch`), it opens an interactive `pygame-ce` GUI:
+- **Trace discovery:** dynamically discovers user traces (`traces/*.trace.npz`) and sample traces (`traces/samples/*.trace.npz`), sorting user traces first, then alphabetically.
+- **Dropdown selector:** scrollable trace menu displaying trace category badges, filenames, and file sizes. Supports mouse wheel and arrow keys with automated viewport tracking.
+- **Fast metadata inspection:** inspects `__manifest__.npy` without extracting heavy tensor arrays (< 20 ms), displaying model name, layer count, embedding dimension, attention heads, parameter count, pass count, total steps, and prompt preview.
+- **Presenter settings pills:** allows toggling Window Mode (`borderless` / `windowed`), Theme (`dark` / `light`), Detail Level (`Story` / `Standard` / `Deep`), and Caption Language (`EN` / `KO` / `JA`) before launching.
+- **Seamless transition:** cleanly closes the launcher window, transfers chosen settings to `App`, and enters presentation playback.
+
 ---
 
 ## 7. CLI Reference
 
 ```bash
+# Launch the Interactive GUI Trace Selector (Default entrypoint)
+tilevis
+tilevis launch
+tilevis launch --traces-dir /path/to/custom/traces
+tilevis launch --headless
+
 # Inspect a profile or raw .pth checkpoint (inferred config, adapter, parameter count)
 tilevis inspect --profile profiles/example_team_model.toml
 tilevis inspect --checkpoint path/to/model.pth
@@ -276,7 +291,7 @@ tilevis record \
   --strategy greedy \
   -o traces/team_model.trace.npz
 
-# Play back a recorded trace (requires ONLY base install: numpy + pygame-ce)
+# Play back a recorded trace directly (requires ONLY base install: numpy + pygame-ce)
 tilevis play traces/team_model.trace.npz --window borderless --theme dark
 tilevis play traces/team_model.trace.npz --headless   # offscreen verification
 
@@ -286,6 +301,16 @@ tilevis check traces/team_model.trace.npz
 # Instant zero-config demo using a tiny seeded random model (requires .[record])
 tilevis demo --prompt "Hello world"
 ```
+
+---
+
+## 8. Standalone Executable Packaging & Portable USB Deployment
+
+To eliminate the need for Python, PyTorch, or CUDA on the lecture hall presentation computer, `tilevis` provides standalone PyInstaller packaging (`packaging/tilevis_player.spec` and `scripts/build_usb_dist.py`):
+- **macOS:** Produces `tilevis_player.app` (application bundle) and standalone Unix binary (`bin/tilevis_player`).
+- **Windows:** Produces standalone `tilevis_player.exe` with bundled runtime DLLs.
+- **Staged USB directory:** Automatically stages `dist/usb_drive/tilevis_player/` containing the executable, presenter settings (`presenter/default.toml`), README instructions, and an external editable `traces/` folder. Presenters can drop new `*.trace.npz` files onto the USB thumb drive at any time, click "Refresh", and immediately visualize them.
+- **CI automation:** Multi-platform builds are built continuously across macOS and Windows runners via `.github/workflows/build_executables.yml`.
 
 ---
 

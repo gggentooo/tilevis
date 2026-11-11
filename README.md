@@ -22,15 +22,31 @@ python -m venv .venv
 pip install -e .
 ```
 
-### Preflight Diagnostics & Playback
+### Preflight Diagnostics, Interactive Launcher & Playback
 
 ```bash
 # 1. Run preflight environment check
 python -m tilevis check
 
-# 2. Launch interactive demo trace (or double-click scripts/play_demo.bat on Windows)
+# 2. Open the Interactive Trace Launcher GUI (Default!)
+python -m tilevis
+# or: tilevis launch
+
+# 3. Or launch directly into a trace file (or double-click scripts/play_demo.bat on Windows)
 python -m tilevis play traces/samples/tiny_demo.trace.npz --window borderless
 ```
+
+---
+
+## 2. Portable USB Thumb-Drive Player (Zero Python Needed on Lecture PC)
+
+To present in the lecture hall without installing Python, PyTorch, or CUDA:
+1. Build the standalone portable distribution: `python scripts/build_usb_dist.py`.
+2. Copy the resulting `dist/usb_drive/tilevis_player/` folder directly onto a USB thumb drive.
+3. On stage:
+   - **macOS:** Double-click `tilevis_player.app`
+   - **Windows:** Double-click `tilevis_player.exe`
+4. The interactive launcher opens instantly, discovers all `.trace.npz` files in `traces/`, and lets you start the presentation with one click.
 
 ---
 

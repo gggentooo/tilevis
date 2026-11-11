@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest import mock
+
 import pytest
 
 import tilevis
@@ -23,15 +25,15 @@ def test_cli_help(capsys: pytest.CaptureFixture[str]) -> None:
     assert exc_info.value.code == 0
     captured = capsys.readouterr()
     assert "LLM Tile Visualizer" in captured.out
-    for sub in ["record", "play", "inspect", "check", "demo"]:
+    for sub in ["record", "play", "inspect", "check", "demo", "launch"]:
         assert sub in captured.out
 
 
-def test_cli_no_args_prints_help(capsys: pytest.CaptureFixture[str]) -> None:
-    code = main([])
-    assert code == 0
-    captured = capsys.readouterr()
-    assert "usage:" in captured.out
+def test_cli_no_args_launches_gui() -> None:
+    with mock.patch("tilevis.cli._launch_command", return_value=0) as mock_launch:
+        code = main([])
+        assert code == 0
+        assert mock_launch.call_count == 1
 
 
 def test_cli_record_error_on_missing_profile(capsys: pytest.CaptureFixture[str]) -> None:

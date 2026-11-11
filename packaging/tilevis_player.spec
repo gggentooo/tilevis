@@ -1,10 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller specification for building standalone tilevis player for Windows lecture PCs.
+"""PyInstaller specification for building standalone tilevis player for Windows and macOS.
 
 Bundles only playback modules (core, narration, render, assets, presenter, sample traces)
 and explicitly excludes heavy recording & dev dependencies (torch, tiktoken, matplotlib, etc.).
 """
 
+import sys
 from pathlib import Path
 
 block_cipher = None
@@ -19,6 +20,10 @@ datas = [
     (str(REPO_ROOT / "presenter" / "*.toml"), "presenter"),
     (str(REPO_ROOT / "traces" / "samples" / "*.trace.npz"), "traces/samples"),
 ]
+
+traces_dir = REPO_ROOT / "traces"
+if traces_dir.is_dir():
+    datas.append((str(traces_dir / "*.trace.npz"), "traces"))
 
 excludes = [
     "torch",
@@ -46,6 +51,7 @@ a = Analysis(
         "tilevis.core",
         "tilevis.narration",
         "tilevis.render",
+        "tilevis.render.launcher",
         "tilevis.check",
     ],
     hookspath=[],
@@ -88,3 +94,17 @@ coll = COLLECT(
     upx_exclude=[],
     name="tilevis_player",
 )
+
+if sys.platform == "darwin":
+    app = BUNDLE(
+        coll,
+        name="tilevis_player.app",
+        icon=None,
+        bundle_identifier="com.tilevis.player",
+        info_plist={
+            "NSHighResolutionCapable": "True",
+            "CFBundleDisplayName": "LLM Tile Visualizer",
+            "CFBundleShortVersionString": "1.2.0",
+        },
+    )
+

@@ -106,19 +106,36 @@ def check_bundled_fonts() -> tuple[bool, str]:
 
 
 def check_display_modes() -> tuple[bool, str]:
-    """Detect available desktop resolutions without requiring a window."""
+    """Detect available desktop resolutions and High-DPI support without requiring a window."""
     try:
         import pygame
 
+        from tilevis.render.platform import detect_display_info, enable_high_dpi
+
+        enable_high_dpi()
         if not pygame.display.get_init():
             pygame.display.init()
 
+        disp_info = detect_display_info(0)
+        win_w, win_h = disp_info.default_windowed
         sizes = pygame.display.get_desktop_sizes()
         if sizes:
             res_str = ", ".join(f"{w}x{h}" for w, h in sizes)
-            return True, f"Detected display(s): {res_str}"
-        info = pygame.display.Info()
-        return True, f"Current display resolution: {info.current_w}x{info.current_h}"
+            disp_desc = f"Detected display(s): {res_str} (default windowed: {win_w}x{win_h})"
+        else:
+            info = pygame.display.Info()
+            disp_desc = (
+                f"Current display: {info.current_w}x{info.current_h} "
+                f"(default windowed: {win_w}x{win_h})"
+            )
+
+        high_dpi_support = hasattr(pygame, "Window")
+        dpi_note = (
+            "High-DPI backing: supported (pygame.Window)"
+            if high_dpi_support
+            else "High-DPI backing: legacy mode"
+        )
+        return True, f"{disp_desc} · {dpi_note}"
     except Exception as exc:
         return True, f"Display query skipped (headless or offscreen): {exc}"
 

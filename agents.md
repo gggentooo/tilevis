@@ -996,10 +996,10 @@ Every phase's **Test step** has six parts:
 
 ## 9. Development plan
 
-Phase N produces version `0.N.0`. Phase 8 produces `1.0.0`. Do phases **in order**.
+Phase N produces version `0.N.0`. Phase 8 produces `1.0.0`. Post-`1.0.0` enhancement phases increment minor versions (`1.1.0`, …). Do phases **in order**.
 
 ```
-P1 Scaffolding ─► P2 Core contract ─► P3 Model loading ─► P4 Probe/recorder ─► P5 Renderer base ─► P6 Scenes ─► P7 Presentation UX ─► P8 Windows deploy
+P1 Scaffolding ─► P2 Core contract ─► P3 Model loading ─► P4 Probe/recorder ─► P5 Renderer base ─► P6 Scenes ─► P7 Presentation UX ─► P8 Windows deploy ─► P9 Crisp HiDPI & auto-resolution
 ```
 
 Each phase lists: **Goal**, **Tasks**, **Deliverables**, **Test step** (six parts, §8.5) and **Exit criteria**.
@@ -1366,6 +1366,53 @@ Each phase lists: **Goal**, **Tasks**, **Deliverables**, **Test step** (six part
    - Record rehearsal confirmation in `changelog.md`.
 
 **Exit criteria:** all six test parts pass; `ch07/` untouched; `changelog.md` finalized for `1.0.0`.
+
+---
+
+### Phase 9: Native High-DPI rendering, automatic resolution detection, and crisp 1080p viewport (`1.1.0`)
+
+**Goal:** eliminate viewport haziness/blurriness across standard 1080p (`1920×1080`), Windows HiDPI (`125%` / `150%` / `200%`), and macOS Retina displays by rendering directly at the display's physical backing-pixel resolution, automatically detecting the active monitor resolution, and keeping all text, borders, and tile grids pixel-sharp (R1, R5, R9, R10, R11).
+
+**Tasks**
+1. `render/platform.py` — Early DPI awareness, SDL hints & automatic display resolution detection:
+   - Update `enable_high_dpi()` to set `os.environ.setdefault("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2")` and `os.environ.setdefault("SDL_VIDEO_HIGHDPI_DISABLED", "0")` **before** any SDL video or font subsystem initializes.
+   - On Windows, attempt `user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))` (`DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2`) first, falling back to `shcore.SetProcessDpiAwareness(2)` and then `user32.SetProcessDPIAware()`.
+   - Add `DisplayInfo` dataclass and `detect_display_info(display: int = 0) -> DisplayInfo` returning the detected desktop logical dimensions `(desktop_w, desktop_h)` and a smart default windowed resolution (`default_windowed_size(desktop_w, desktop_h)`): exact `(1920, 1080)` when the desktop exceeds 1080p, or a crisp 16:9 fit (~85% of desktop bounds, minimum `800×450`) when running in `windowed` mode on a `1920×1080` or smaller display, replacing the hardcoded `(1600, 900)` fractional default.
+2. `render/window.py` — Native High-DPI `pygame.Window` backing surface & coordinate mapping:
+   - Upgrade `WindowManager` to create and manage a `pygame-ce` `pygame.Window` with `allow_high_dpi=True` (using `window.get_surface()` and `window.flip()`), while preserving a clean fallback to `pygame.display.set_mode()` when `pygame.Window` is mocked or unavailable in legacy driver environments.
+   - Separate and track both `logical_size: tuple[int, int]` (window size in OS points) and `drawable_size: tuple[int, int]` (`surface.get_size()` in physical backing pixels, which `self.size` reports for `UiScale`), plus `dpi_scale: tuple[float, float] = (drawable_w / logical_w, drawable_h / logical_h)`.
+   - Add `WindowManager.map_point(pos: tuple[int, int]) -> tuple[int, int]` to convert mouse event coordinates (`MOUSEMOTION.pos`, `MOUSEBUTTONDOWN.pos`) from logical window space into physical drawable surface pixels (`1:1` identity on standard 1080p `1.0×` displays; `2.0×` on Retina displays).
+   - Add `WindowManager.present() -> None` calling `self._window.flip()` (or `pygame.display.flip()` on fallback) so `App.run()` flips the active High-DPI surface cleanly.
+3. `render/layout.py` — Exact `1.0` scale snapping on 1080p viewports:
+   - In `UiScale.from_viewport(viewport_w, viewport_h)`, snap `s` to exact `1.0` when `abs(s - 1.0) < 0.01` (e.g., on `1920×1080` or `1920×1200` displays) so `px()` and `font_px()` use exact unscaled integer pixel sizes with zero rounding drift.
+4. `render/app.py` — Early DPI init, mouse coordinate scaling & resize scene-context refresh:
+   - Call `enable_high_dpi()` at the very beginning of `App.__init__()` *before* `pygame.font.init()`.
+   - When `viewport_size` is `None`, allow `WindowManager` to auto-select its resolution from `detect_display_info(display)` rather than passing a hardcoded `(1600, 900)`.
+   - Route `MOUSEMOTION` and `MOUSEBUTTONDOWN` positions through `self.window.map_point(pos)` before hit-testing HUD buttons, minimap segments, and scene tooltips.
+   - In `App.resize()` and `Command.TOGGLE_FULLSCREEN`, refresh `self.scene`'s `SceneContext` and invalidate `_cached_stage_size` (via `_enter_current_step(animate=False)` while preserving timeline progress) so all `TileGrid`s and fonts immediately re-render at the new physical pixel resolution.
+5. `render/scenes/common.py` — Crisp stroke and panel geometry:
+   - In `draw_bezier_arc()`, remove the redundant `pygame.draw.aalines()` pass drawn over the center of thick (`thickness > 1`) polylines, which previously blended a fuzzy seam down the middle of attention arcs.
+6. `check.py` — Preflight High-DPI & drawable resolution diagnostics:
+   - Update `check_display_modes()` to report the detected desktop size alongside High-DPI backing resolution support.
+
+**Deliverables:** `1.1.0` release with native High-DPI `pygame.Window` rendering, automatic monitor resolution detection, `1:1` crisp 1080p viewport edges/text, accurate High-DPI mouse coordinate mapping, and updated `changelog.md`.
+
+**Test step**
+1. *Unit:*
+   - `platform.py`: verify `enable_high_dpi()` sets SDL DPI environment hints and tries `SetProcessDpiAwarenessContext` → `SetProcessDpiAwareness` → `SetProcessDPIAware`; verify `detect_display_info()` and `default_windowed_size()` across `1366×768`, `1512×982`, `1920×1080`, `2560×1440`, and `3840×2160` simulated monitors.
+   - `window.py`: verify `WindowManager` tracks `logical_size`, `drawable_size`, and `dpi_scale`, and that `map_point()` maps `(x, y)` accurately for both `1.0×` (`1920×1080` surface on `1920×1080` window) and `2.0×` (`3024×1964` surface on `1512×982` window) DPI scales.
+   - `layout.py`: verify `UiScale.from_viewport(1920, 1080)` produces exact `s == 1.0`, `canvas_rect == Rect(0, 0, 1920, 1080)`, and integer-aligned `px()` / `font_px()`.
+2. *Regression:* full test suite across Phases 1–9 (`pytest -m "not manual"`) passes with coverage `≥ 85%` overall (`≥ 90%` on `core` and `narration`), including all 6 committed sample traces (`tiny_ch07`, `tiny_demo`, `big_en`, `big_es`, `big_ja`, `big_ko`).
+3. *Compatibility:*
+   - Render all 8 `compat_matrix` models and all 6 sample traces (including `big_ja` and `big_ko` CJK traces) headlessly at `(1920, 1080)`, `(1512, 982)`, `(2560, 1440)`, and `(3024, 1964)` drawable resolutions with zero errors or clipped text.
+   - Verify `git diff ch07/` and `git status ch07/` remain empty (R6).
+4. *Weakness probes:*
+   - **Simulated 2× Retina / 150% Windows HiDPI click accuracy:** simulate a window where `logical_size = (1280, 720)` and `drawable_size = (1920, 1080)` (`dpi_scale = (1.5, 1.5)`) or `(1512, 982)` → `(3024, 1964)` (`dpi_scale = (2.0, 2.0)`); verify synthetic `MOUSEBUTTONDOWN` events in logical coordinates hit the exact on-screen footer buttons and minimap segments drawn in physical coordinates.
+   - **Live resize & `F11` mode switch crispness:** resize `App` from `1280×720` → `1920×1080` → `3024×1964` mid-step and verify `scene._ctx.scale`, `TileGrid.cell_px`, and font sizes update immediately without stale low-res surfaces.
+5. *Static:* `ruff check src tests`, `ruff format --check src tests`, `mypy --strict` on `core`/`narration`/`render`, `mypy` on `probe`/`check.py`, and `test_import_boundaries.py` pass with zero errors.
+6. *Manual:* launch `tilevis play traces/samples/big_en.trace.npz` and `traces/samples/big_ja.trace.npz` in both `borderless` and `windowed` modes; verify razor-sharp text and tile edges at 1080p and on HiDPI/Retina displays, and record results in `changelog.md`.
+
+**Exit criteria:** all six test parts pass; `ch07/` untouched; `changelog.md` updated for `1.1.0`.
 
 ---
 

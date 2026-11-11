@@ -149,8 +149,11 @@ class FontManager:
         candidates: list[Path] = []
         if sys.platform == "darwin":
             candidates = [
-                Path("/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc" if bold
-                     else "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc"),
+                Path(
+                    "/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc"
+                    if bold
+                    else "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc"
+                ),
                 Path("/System/Library/Fonts/Hiragino Sans GB.ttc"),
             ]
         elif sys.platform == "win32":
@@ -163,8 +166,11 @@ class FontManager:
             candidates = [fonts_dir / n for n in names]
         else:  # Linux / Unix
             candidates = [
-                Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc" if bold
-                     else "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+                Path(
+                    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"
+                    if bold
+                    else "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
+                ),
                 Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
                 Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
             ]

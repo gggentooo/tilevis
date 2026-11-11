@@ -33,6 +33,8 @@ class UiScale:
         vw = max(1, int(viewport_w))
         vh = max(1, int(viewport_h))
         s = min(vw / float(LOGICAL_WIDTH), vh / float(LOGICAL_HEIGHT))
+        if abs(s - 1.0) < 0.01:
+            s = 1.0
 
         cw = max(1, round(LOGICAL_WIDTH * s))
         ch = max(1, round(LOGICAL_HEIGHT * s))

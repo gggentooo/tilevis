@@ -19,6 +19,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 | `0.6.0` | Phase 6 | Dedicated scenes: matmul, attention, residual and prediction | Completed (2026-11-08) |
 | `0.7.0` | Phase 7 | Presentation UX, widgets, nerd mode and polish | Completed (2026-11-08) |
 | `1.0.0` | Phase 8 | Windows lecture-hall readiness, preflight, packaging and docs | Completed (2026-11-08) |
+| `1.1.0` | Phase 9 | Crisp High-DPI rendering, auto-resolution & 1080p viewport | Completed (2026-11-11) |
+
+---
+
+## [1.1.0] - 2026-11-11 — Phase 9: Native High-DPI rendering, automatic resolution detection, and crisp 1080p viewport
+
+**Requirements addressed:** R1, R5, R9, R10, R11
+
+### Added
+- `src/tilevis/render/platform.py`:
+  - `DisplayInfo` dataclass exposing `.desktop_size`, `.default_windowed`, `.desktop_w`, and `.desktop_h`.
+  - `detect_display_info(display: int = 0) -> DisplayInfo` detecting desktop geometry and computing optimal windowed geometry.
+  - `default_windowed_size(desktop_w: int, desktop_h: int) -> tuple[int, int]` generating crisp 16:9 resolutions (~85% of desktop bounds, minimum 800x450; exact 1920x1080 for monitors exceeding 1080p in both dimensions), replacing the fractional (1600, 900) default.
+- `src/tilevis/render/window.py`:
+  - Native High-DPI `pygame.Window` integration (`allow_high_dpi=True`) using `window.get_surface()` and `window.flip()`, with seamless fallback to `pygame.display.set_mode()` for legacy video environments.
+  - Tracking of `logical_size`, `drawable_size`, and `dpi_scale` (`(drawable_w / logical_w, drawable_h / logical_h)`).
+  - `WindowManager.map_point(pos) -> tuple[int, int]` accurately translating mouse positions from logical window space to physical backing pixels.
+  - `WindowManager.present()` and `WindowManager.destroy()` lifecycle methods.
+- `src/tilevis/render/animation.py`: `Timeline.seek(progress: float)` allowing preservation of fractional animation progress across viewport resizes.
+- `tests/render/test_phase9_resolutions_and_cjk.py`: Parametrized test suite verifying compatibility across all 8 `COMPAT_MATRIX` architectures and all 6 committed sample traces (`big_en`, `big_es`, `big_ja`, `big_ko`, `tiny_ch07`, `tiny_demo`) across standard 1080p, Retina (`1512x982` / `3024x1964`), 1440p, and 4K viewports, plus `ch07/` immutability assertion.
+
+### Changed
+- `src/tilevis/render/platform.py`: `enable_high_dpi()` updated to set `SDL_WINDOWS_DPI_AWARENESS=permonitorv2` and `SDL_VIDEO_HIGHDPI_DISABLED=0` SDL hints before display init, and to invoke `SetProcessDpiAwarenessContext(-4)` (`DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2`) before falling back to `shcore.SetProcessDpiAwareness(2)` and `user32.SetProcessDPIAware()`.
+- `src/tilevis/render/layout.py`: In `UiScale.from_viewport()`, snapped `s` to exact `1.0` when `abs(s - 1.0) < 0.01` (e.g. 1920x1080 or 1920x1200 viewports) so `px()` and `font_px()` yield exact unscaled integer pixels with zero rounding drift.
+- `src/tilevis/render/app.py`:
+  - `enable_high_dpi()` called at the beginning of `App.__init__()` prior to `pygame.font.init()`.
+  - Default windowed size dynamically resolved via `detect_display_info()` when `viewport_size` is omitted.
+  - Mouse motion and click events mapped via `self.window.map_point(raw_pos)`.
+  - Live resize and `F11` fullscreen toggling immediately refresh `SceneContext` and re-render `TileGrid`s and fonts at the new physical pixel resolution while preserving fractional animation progress.
+  - Frame presentation routed through `self.window.present()`, and window destruction handled via `self.window.destroy()`.
+- `src/tilevis/render/scenes/common.py`: Removed redundant `pygame.draw.aalines()` pass over thick polylines in `draw_bezier_arc()`, eliminating blurred center seams down attention arcs.
+- `src/tilevis/check.py`: Updated `check_display_modes()` to report detected display size, default windowed size, and High-DPI backing support via `pygame.Window`.
+- `pyproject.toml` & `src/tilevis/__init__.py`: Version bumped from `1.0.0` to `1.1.0`.
+
+### Verification & Test Summary
+- **Automated tests:** **387 passed** in **56.52 s** (`pytest -m "not manual" --cov=tilevis`), **90%** overall statement coverage across 8,188 statements (`core` 88-100%, `narration` 90%, `render` 81-100%).
+- **PyTorch-free playback boundary:** Verified with `test_torch_free_suite.py` and `test_import_boundaries.py` that all playback modules (`core`, `narration`, `render`, `check`) execute with `torch` completely absent from `sys.modules`.
+- **Static checks:** `ruff check src tests` clean, `ruff format --check src tests` clean (147 files), `mypy --strict` on `core`/`narration`/`render` (54 files clean), `mypy` on `probe` and `check.py` (33 files clean), and `git diff ch07/` completely empty.
+- **Resolution & HiDPI probes:** Simulated 2.0x Retina (`1512x982` window -> `3024x1964` drawable) and 1.5x Windows HiDPI (`1280x720` window -> `1920x1080` drawable) click coordinate mapping validated against interactive buttons; live resize across 720p, 1080p, and Retina verified without stale surfaces or lost state.
 
 ---
 

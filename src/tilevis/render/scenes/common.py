@@ -442,7 +442,6 @@ def draw_bezier_arc(
         pygame.draw.aalines(surface, color, False, pts)
     else:
         pygame.draw.lines(surface, color, False, pts, thickness)
-        pygame.draw.aalines(surface, color, False, pts)
 
 
 def blend_rgb(c1: ColorRGB, c2: ColorRGB, t: float) -> ColorRGB:

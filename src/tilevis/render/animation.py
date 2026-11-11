@@ -114,6 +114,12 @@ class Timeline:
         self.elapsed = self.duration
         self._finished = True
 
+    def seek(self, progress: float) -> None:
+        """Seek timeline to normalized progress in [0.0, 1.0]."""
+        p = _clamp01(progress)
+        self.elapsed = self.duration * p
+        self._finished = p >= 1.0 or self.duration <= 0.0
+
     def reset(self, *, animate: bool = True) -> None:
         """Reset timeline to start (or immediately finished if animate=False)."""
         if animate and self.duration > 0.0:

@@ -20,6 +20,7 @@ from tilevis.render.commands import Command
 from tilevis.render.input_map import InputMap
 from tilevis.render.layout import UiScale
 from tilevis.render.normalization import get_normalizer
+from tilevis.render.platform import detect_display_info, enable_high_dpi
 from tilevis.render.player import StepPlayer
 from tilevis.render.playlist import resolve_step
 from tilevis.render.scenes.base import Scene, SceneContext, Tooltip
@@ -54,18 +55,27 @@ class App:
         self.settings = settings or PresenterSettings()
         self.headless = headless
 
+        enable_high_dpi()
+
         if not pygame.font.get_init():
             pygame.font.init()
 
+        display_idx = self.settings.window_display
+        disp_info = detect_display_info(display_idx)
+        win_size = viewport_size or disp_info.default_windowed
+
         self.window = WindowManager(
             mode=self.settings.window_mode,
-            display=self.settings.window_display,
-            windowed_size=viewport_size or (1600, 900),
+            display=display_idx,
+            windowed_size=win_size,
         )
         if headless:
             size = viewport_size or (1920, 1080)
             self.window.windowed_size = size
             self.window.size = (max(1, size[0]), max(1, size[1]))
+            self.window.logical_size = self.window.size
+            self.window.drawable_size = self.window.size
+            self.window.dpi_scale = (1.0, 1.0)
             self.surface: pygame.Surface = pygame.Surface(self.window.size)
         else:
             self.surface = self.window.create(headless=False)
@@ -139,14 +149,22 @@ class App:
         h = max(1, int(height))
         if self.headless:
             self.window.size = (w, h)
+            self.window.logical_size = (w, h)
+            self.window.drawable_size = (w, h)
+            self.window.dpi_scale = (1.0, 1.0)
             self.surface = pygame.Surface((w, h))
         else:
             self.surface = self.window.handle_resize(w, h, headless=False)
         sw, sh = self.surface.get_size()
         self.scale = UiScale.from_viewport(sw, sh)
-        if self._current_pass is not None:
-            # Refresh context scale without restarting animation progress
-            self._needs_redraw = True
+        if self._current_step is not None and self._current_pass is not None:
+            tl = getattr(self.scene, "_timeline", None)
+            was_animating = self.scene.is_animating
+            progress_val = tl.progress if tl is not None else 1.0
+            self._enter_current_step(animate=was_animating)
+            if was_animating and hasattr(self.scene, "_timeline"):
+                self.scene._timeline.seek(progress_val)
+        self._needs_redraw = True
 
     def _cycle_detail_level(self) -> None:
         """Rotate STORY (1) -> STANDARD (2) -> DEEP (3) and re-anchor StepPlayer."""
@@ -282,6 +300,13 @@ class App:
                 self.surface = self.window.toggle_fullscreen(headless=False)
                 sw, sh = self.surface.get_size()
                 self.scale = UiScale.from_viewport(sw, sh)
+                if self._current_step is not None and self._current_pass is not None:
+                    tl = getattr(self.scene, "_timeline", None)
+                    was_animating = self.scene.is_animating
+                    progress_val = tl.progress if tl is not None else 1.0
+                    self._enter_current_step(animate=was_animating)
+                    if was_animating and hasattr(self.scene, "_timeline"):
+                        self.scene._timeline.seek(progress_val)
             self._needs_redraw = True
             return
 
@@ -313,10 +338,8 @@ class App:
             if hasattr(pygame, "WINDOWSIZECHANGED") and ev.type == pygame.WINDOWSIZECHANGED:
                 win_w = getattr(ev, "x", None) or getattr(ev, "w", None)
                 win_h = getattr(ev, "y", None) or getattr(ev, "h", None)
-                if (win_w is None or win_h is None) and pygame.display.get_init():
-                    cur = pygame.display.get_surface()
-                    if cur is not None:
-                        win_w, win_h = cur.get_size()
+                if win_w is None or win_h is None:
+                    win_w, win_h = self.window.logical_size
                 if win_w is not None and win_h is not None:
                     self.resize(int(win_w), int(win_h))
                 continue
@@ -333,7 +356,8 @@ class App:
                 continue
 
             if ev.type == pygame.MOUSEMOTION:
-                pos = getattr(ev, "pos", (0, 0))
+                raw_pos = getattr(ev, "pos", (0, 0))
+                pos = self.window.map_point(raw_pos)
                 if self._help_open:
                     self._active_tooltip = None
                 else:
@@ -344,7 +368,8 @@ class App:
                 continue
 
             if ev.type == pygame.MOUSEBUTTONDOWN:
-                pos = getattr(ev, "pos", (0, 0))
+                raw_pos = getattr(ev, "pos", (0, 0))
+                pos = self.window.map_point(raw_pos)
                 # 1. Help overlay open -> click closes overlay
                 if self._help_open:
                     self._help_open = False
@@ -499,8 +524,8 @@ class App:
         clock = pygame.time.Clock()
 
         self.draw()
-        if not self.headless and pygame.display.get_init():
-            pygame.display.flip()
+        if not self.headless:
+            self.window.present()
         self._needs_redraw = False
 
         try:
@@ -530,14 +555,14 @@ class App:
 
                 if self._needs_redraw or self.scene.is_animating or had_events:
                     self.draw()
-                    if not self.headless and pygame.display.get_init():
-                        pygame.display.flip()
+                    if not self.headless:
+                        self.window.present()
                     self._needs_redraw = False
 
                 if self.headless:
                     break
         finally:
-            if not self.headless and pygame.display.get_init():
-                pygame.display.quit()
+            if not self.headless:
+                self.window.destroy()
 
         return self.exit_code

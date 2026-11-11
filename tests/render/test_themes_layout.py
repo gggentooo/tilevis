@@ -81,6 +81,18 @@ def test_uiscale_regions_non_overlapping_across_viewports(vw: int, vh: int) -> N
             assert not regions[i].colliderect(regions[j])
 
 
+def test_uiscale_1080p_exact_snapping() -> None:
+    """UiScale on 1080p viewports produces exact s == 1.0, Rect(0, 0, 1920, 1080), and integers."""
+    import pygame
+
+    scale = UiScale.from_viewport(1920, 1080)
+    assert scale.s == 1.0
+    assert scale.canvas_rect == pygame.Rect(0, 0, 1920, 1080)
+    assert scale.px(42) == 42
+    assert scale.px(100) == 100
+    assert scale.font_px(24) == 24
+
+
 def test_font_manager_bundled_loading_caching_and_wrapping() -> None:
     """FontManager loads Noto Sans OFL fonts from package assets and caches Font instances."""
     fm = FontManager()

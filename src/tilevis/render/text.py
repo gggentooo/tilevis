@@ -45,6 +45,28 @@ def _has_korean(text: str) -> bool:
     )
 
 
+def _has_japanese(text: str) -> bool:
+    """Return True if text contains kana, CJK ideographs, or CJK/fullwidth punctuation."""
+    return any(
+        "\u3040" <= ch <= "\u30ff"  # hiragana, katakana
+        or "\u31f0" <= ch <= "\u31ff"  # katakana phonetic extensions
+        or "\u3400" <= ch <= "\u4dbf"  # CJK ext A
+        or "\u4e00" <= ch <= "\u9fff"  # CJK unified ideographs
+        or "\u3000" <= ch <= "\u303f"  # CJK punctuation (、。)
+        or "\uff00" <= ch <= "\uffef"  # halfwidth/fullwidth forms
+        for ch in text
+    )
+
+
+def _script_of(text: str) -> str | None:
+    """Pick which non-Latin font a text needs: 'korean', 'japanese', or None."""
+    if _has_korean(text):
+        return "korean"
+    if _has_japanese(text):
+        return "japanese"
+    return None
+
+
 class FontManager:
     """Loads bundled OFL TrueType fonts via importlib.resources and caches Font instances."""
 
@@ -54,6 +76,7 @@ class FontManager:
         self._font_cache: dict[tuple[str, bool, int], pygame.font.Font] = {}
         self._glyph_ok_cache: dict[tuple[str, bool, str], bool] = {}
         self._korean_font_path: dict[bool, str | None] = {}
+        self._japanese_font_path: dict[bool, str | None] = {}
 
     def _ensure_font_init(self) -> None:
         if not pygame.font.get_init():
@@ -118,6 +141,42 @@ class FontManager:
         self._korean_font_path[bold] = None
         return None
 
+    def _find_japanese_font(self, bold: bool) -> str | None:
+        """Find a host font that covers kana and kanji."""
+        if bold in self._japanese_font_path:
+            return self._japanese_font_path[bold]
+
+        candidates: list[Path] = []
+        if sys.platform == "darwin":
+            candidates = [
+                Path("/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc" if bold
+                     else "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc"),
+                Path("/System/Library/Fonts/Hiragino Sans GB.ttc"),
+            ]
+        elif sys.platform == "win32":
+            fonts_dir = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"
+            names = (
+                ["YuGothB.ttc", "meiryob.ttc", "YuGothM.ttc", "meiryo.ttc", "msgothic.ttc"]
+                if bold
+                else ["YuGothM.ttc", "YuGothR.ttc", "meiryo.ttc", "msgothic.ttc"]
+            )
+            candidates = [fonts_dir / n for n in names]
+        else:  # Linux / Unix
+            candidates = [
+                Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc" if bold
+                     else "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+                Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+                Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
+            ]
+
+        for cand in candidates:
+            if cand.is_file():
+                self._japanese_font_path[bold] = str(cand)
+                return str(cand)
+
+        self._japanese_font_path[bold] = None
+        return None
+
     def _load_bytes(self, family: str, bold: bool) -> bytes:
         norm_family = family.strip().lower().replace(" ", "")
         key = (norm_family, bold)
@@ -149,20 +208,27 @@ class FontManager:
         bold: bool = False,
         family: str | None = None,
         is_korean: bool = False,
+        script: str | None = None,
     ) -> pygame.font.Font:
         """Return cached pygame.font.Font for the requested family, weight, and pixel size."""
         self._ensure_font_init()
         fam = family or self.default_family
         norm_fam = fam.strip().lower().replace(" ", "")
         px = max(8, int(size_px))
-        cache_key = ("korean" if is_korean else norm_fam, bold, px)
+        if is_korean:
+            script = "korean"
+        cache_key = (script or norm_fam, bold, px)
 
         cached = self._font_cache.get(cache_key)
         if cached is not None:
             return cached
 
-        if is_korean:
-            kr_path = self._find_korean_font(bold)
+        if script in ("korean", "japanese"):
+            kr_path = (
+                self._find_korean_font(bold)
+                if script == "korean"
+                else self._find_japanese_font(bold)
+            )
             if kr_path is not None:
                 try:
                     font = pygame.font.Font(kr_path, px)
@@ -181,6 +247,7 @@ class FontManager:
         self._font_cache.clear()
         self._glyph_ok_cache.clear()
         self._korean_font_path.clear()
+        self._japanese_font_path.clear()
 
     def _prepare_text(
         self,
@@ -228,8 +295,7 @@ class FontManager:
         max_width: int | None = None,
     ) -> pygame.Surface:
         """Render single-line text, optionally truncating with ellipsis to fit max_width."""
-        is_kr = _has_korean(text)
-        font = self.get(size_px, bold=bold, family=family, is_korean=is_kr)
+        font = self.get(size_px, bold=bold, family=family, script=_script_of(text))
         display_text = self._prepare_text(text, bold=bold, family=family)
         if max_width is not None and max_width > 0 and font.size(display_text)[0] > max_width:
             display_text = self.truncate(display_text, max_width, size_px, bold=bold, family=family)
@@ -245,8 +311,7 @@ class FontManager:
         family: str | None = None,
     ) -> str:
         """Truncate text with '...' if its rendered pixel width exceeds max_width."""
-        is_kr = _has_korean(text)
-        font = self.get(size_px, bold=bold, family=family, is_korean=is_kr)
+        font = self.get(size_px, bold=bold, family=family, script=_script_of(text))
         clean_text = self._prepare_text(text, bold=bold, family=family)
         if max_width <= 0:
             return ""
@@ -277,8 +342,7 @@ class FontManager:
         """Word-wrap text into lines fitting within max_width pixels."""
         if max_width <= 0 or not text:
             return []
-        is_kr = _has_korean(text)
-        font = self.get(size_px, bold=bold, family=family, is_korean=is_kr)
+        font = self.get(size_px, bold=bold, family=family, script=_script_of(text))
         prepared = self._prepare_text(text, bold=bold, family=family)
         lines: list[str] = []
 
